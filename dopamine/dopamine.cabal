@@ -57,6 +57,7 @@ executable bandits
     , hashable
     , mmorph
     , mtl
+    , monad-loops
     , mwc-random
     , primitive
     , safe-exceptions

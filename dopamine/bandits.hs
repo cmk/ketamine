@@ -14,6 +14,7 @@ module Main where
 
 import Control.Exception.Safe (assert, MonadThrow)
 import Control.Monad
+import Control.Monad.Loops
 import Control.Monad.Morph (MFunctor(..), MMonad(..), generalize)
 import Control.Monad.IO.Class
 import Control.Monad.Primitive
@@ -23,6 +24,7 @@ import Control.Monad.Trans.RWS (RWST, evalRWST)
 import Data.List (maximumBy, sort)
 import Data.Ord (comparing)
 import Data.Vector ((!), Vector)
+import Data.IORef
 
 import qualified Control.Monad.Trans.Reader as TR
 import qualified Data.DList as D
@@ -37,26 +39,22 @@ import qualified Numeric.Dopamine.Outcome as O
 
 
 newtype Environment a = 
-  Environment { getEnvironment :: RWST EnvState (D.DList Outcome) BanditState IO a }
+  Environment { getEnvironment :: RWST (IORef BanditState) (D.DList Outcome) EnvState IO a }
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadIO
     , MonadThrow
-    , MonadReader EnvState
+    , MonadReader (IORef BanditState)
     , MonadWriter (D.DList Outcome)
-    , MonadState BanditState
-    , MonadRWS EnvState (D.DList Outcome) BanditState
+    , MonadState EnvState
+    , MonadRWS (IORef BanditState) (D.DList Outcome) EnvState
     )
 
 instance PrimMonad Environment where
   type PrimState Environment = RealWorld
   primitive = Environment . primitive
-
-
---get = liftIO . readIORef =<< ask
---put s = liftIO . (`writeIORef` s) =<< ask
 
 -- | The slot machine index whose arm will be pulled
 type Action = Int
@@ -70,41 +68,12 @@ type BanditEnv = EnvT Outcome Environment
 defaultEnvState :: Int -> IO EnvState
 defaultEnvState n = mkEnvState n $ replicate n 1.0
 
-episodeLength :: Int
-episodeLength = 20
-
-main :: IO ()
-main = do
-  config <- defaultEnvState 10
-  res <- runEnvironment config act
-  mapM_ print $ D.toList res
-  print config
-
-askEnv :: MonadEnv EnvState Int m e => e m Int
-askEnv = view $ \s -> 
-  if pulls s <= episodeLength then Just $ pulls s else Nothing
-
-respond :: MonadEnv s Outcome Environment e => e Environment Action -> Environment Outcome
-respond = step stepEnv 
-
---banditView :: BanditEnv s
---banditView = do { s <- get; view' (const True) }
-
---step stepEnv :: MonadEnv s Outcome Environment e => e Environment Action -> Environment Outcome
-
--- | Run an n-armed bandit environment
-runEnvironment :: EnvState -> Environment a -> IO (D.DList Outcome)
-runEnvironment c (Environment m) = snd <$> evalRWST (i >> m) c Map.empty
-  where (Environment i) = mkBandit
-
-------------------------------------------------------------------------------
-
-data EnvState = 
-  EnvState { arms :: Vector N.NormalDistribution , gen :: R.GenIO, pulls :: Int }
-
-instance Show EnvState where
-  show c = "EnvState" ++
-    "{ means = " ++ show (fmap Dist.mean . V.toList $ arms c) ++ ", pulls = " ++ show (pulls c) ++ " }"
+defaultBanditState :: Int -> IO (IORef BanditState)
+defaultBanditState n = do
+  r <- newIORef mempty
+  let init = Map.fromList $ take n $ zip [0..] (repeat mempty)
+  writeIORef r init
+  return r
 
 mkEnvState :: Int -> [Double] -> IO EnvState
 mkEnvState n vars = do
@@ -113,47 +82,75 @@ mkEnvState n vars = do
   let arms = V.fromList $ zipWith N.normalDistr (reverse $ sort means) vars
   return $ EnvState arms gen 0
 
-mkBandit :: Environment BanditState
-mkBandit = do
-  n <- reader $ V.length . arms
-  let init = Map.fromList $ take n $ zip [0..] (repeat mempty)
-  put init
-  return init
+episodeLength :: Int
+episodeLength = 100
+
+narms :: Int
+narms = 10
+
+main :: IO ()
+main = do
+  casino <- defaultEnvState narms
+  bandit <- defaultBanditState narms
+
+  res <- runEnvironment bandit casino act1
+  mapM_ print $ D.toList res
+
+askEnv :: (MonadEnv EnvState Outcome m e) => e m Outcome
+askEnv = view $ \s -> 
+  if pulls s <= episodeLength then Just $ O.Outcome 0 0 else Nothing
+
+respond 
+  :: MonadEnv s Outcome Environment e 
+  => e Environment Action -> Environment Outcome
+respond = step stepEnv 
+
+-- | Run an n-armed bandit environment
+runEnvironment 
+  :: (IORef BanditState) 
+  -> EnvState -> Environment a -> IO (D.DList Outcome)
+runEnvironment bs es (Environment m) = snd <$> evalRWST m bs es
+
+act1 :: Environment ()
+act1 = void $ concatM (replicate 100 (stepEnv >=> stepBandit 0.1)) 9
+
+act2 :: Environment ()
+act2 = void $ iterateUntilM (==0) (stepEnv >=> stepBandit 0.1) 9
+
+------------------------------------------------------------------------------
+
+data EnvState = 
+  EnvState { arms :: Vector N.NormalDistribution , gen :: R.GenIO, pulls :: Int }
+
+instance Show EnvState where
+  show c = "EnvState" ++
+    "{ means = " ++ 
+      show (fmap Dist.mean . V.toList $ arms c) ++ 
+        ", pulls = " ++ show (pulls c) ++ " }"
 
 stepEnv :: Action -> Environment Outcome
 stepEnv action = do
-  rwd <- genContVar =<< (! action) . arms <$> ask
-  modify $ addStats action (Stats action rwd)
-  s <- get
-  tell . pure $ O.Outcome action rwd
+  rwd <- genContVar =<< (! action) . arms <$> get
+  modify $ \(EnvState a g p) -> EnvState a g (p+1)
   return $ O.Outcome action rwd
 
 genContVar :: Dist.ContGen d => d -> Environment Double
 genContVar d = do
-  g <- reader gen
+  g <- gets gen
   liftIO $ Dist.genContVar d g
 
 ------------------------------------------------------------------------------
 -- | Monad for an n-armed bandit environment
--- AgentT o m a -> (a -> m o) -> m a
--- TODO split states up
-runBandit :: Float -> Outcome -> Environment Action
-runBandit eps (O.Outcome i r)= do
-  --modify $ addStats i (Stats 1 r 0)
-  s <- get
+
+stepBandit :: Float -> Outcome -> Environment Action 
+stepBandit eps o@(O.Outcome action rwd) = do
+  r <- ask
+  liftIO $ modifyIORef r $ addStats action (Stats action rwd)
+  tell . pure $ o
+  s <- liftIO $ readIORef r
   let rwds = Map.map mean s
   a <- epsilonGreedy (Map.toList rwds) eps
   return a
-
-act :: Environment ()
-act = replicateM_ 100 $ void $ bandit 0.1
-
-bandit :: Float -> Environment Outcome 
-bandit eps = do
-  s <- get
-  let rwds = Map.map mean s
-  a <- epsilonGreedy (Map.toList rwds) eps
-  stepEnv a
 
 epsilonGreedy
   :: (R.Variate e, Ord e, Ord r) 
@@ -165,16 +162,16 @@ epsilonChoice
   :: (R.Variate e, Ord e) 
   => a -> [(a, r)] -> e -> Environment a
 epsilonChoice a acts eps = do
-  g <- reader gen
+  g <- gets gen
   compare eps <$> R.uniform g >>= \case
     LT -> pure a
     _  -> do
       i <- R.uniformR (0, length acts) g
       pure . fst . head $ drop (i-1) acts
 
-
 ------------------------------------------------------------------------------
 -- | Statistics observed for a particular candidate.
+
 data Stats = Stats
     { armCount :: !Int  -- ^ Number of times this candidate was observed
     , armTotal :: !Double -- ^ Total reward over all observations

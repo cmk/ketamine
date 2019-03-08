@@ -46,7 +46,16 @@ import qualified System.Random.MWC as R
 
 
 newtype AgentT o m a = AgnetT { unAgentT :: SelectT o m a }
-  deriving (Functor, Applicative, Monad)
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    --, MonadCatch
+    --, MonadCont
+    , MonadIO
+    --, MonadThrow
+    , MonadTrans
+    )
 
 runAgentT :: AgentT o m a -> (a -> m o) -> m a
 runAgentT = runSelectT . unAgentT

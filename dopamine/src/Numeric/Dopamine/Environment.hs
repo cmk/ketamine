@@ -39,8 +39,9 @@ import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
 import qualified Control.Monad.Trans.Class as Trans
 
-simple :: (t -> Bool) -> t -> Maybe t
-simple f s = if f s then Just s else Nothing
+
+lift :: MonadEnv s o m e => m o -> e m o
+lift = Trans.lift
 
 lower :: MonadEnv s o m e => e m o -> m o
 lower = lowerEnv
@@ -55,24 +56,19 @@ view = viewEnv
 view' :: MonadEnv s s m e => (s -> Bool) -> e m s
 view' = view . simple
 
-views :: forall s o m e. MonadEnv s o m e => (s -> Maybe o) -> m o
-views = lower @_ @_ @_ @e . view
-
--- A version of 'viewS' specialized to evironments where the full state is visible to an agent.
-views' :: forall s m e. MonadEnv s s m e => (s -> Bool) -> m s
-views' = views @_ @_ @_ @e . simple 
-
+simple :: (t -> Bool) -> t -> Maybe t
+simple f s = if f s then Just s else Nothing
 
 -----------------------------------------------------------------------------------------
 -- | Lift a pure state transition into an environment.
 --
--- The State monad provides a minimal DSL sufficient for describing simple environments.
-lift :: MonadEnv s o m e => (a -> StateT s Maybe o) -> a -> e m o
-lift f a = view $ runStep f a
+-- The 'State' monad provides a minimal DSL sufficient for describing simple environments.
+liftS :: MonadEnv s o m e => (a -> StateT s Maybe o) -> a -> e m o
+liftS f a = view $ runStep f a
 
--- A version of 'lift' specialized to evironments where the full state is visible to an agent.
-lift' :: MonadEnv s s m e => (a -> StateT s Maybe o) -> a -> e m s
-lift' f a = view' . (isJust .) $ runStep f a
+-- A version of 'liftS' specialized to evironments where the full state is visible to an agent.
+liftS' :: MonadEnv s s m e => (a -> StateT s Maybe o) -> a -> e m s
+liftS' f a = view' . (isJust .) $ runStep f a
 
 runStep :: (a -> StateT s Maybe o) -> a -> s -> Maybe o
 runStep f a s = fmap fst . (`runStateT` s) $ f a
@@ -82,8 +78,8 @@ step :: MonadEnv s o m e => (a -> m o) -> e m a -> m o
 step f = lower . withEnv (const f)
 
 -- | Use a pure state transition to advance an environment one step.
-step' :: forall a s o m e. MonadEnv s o m e => (a -> StateT s Maybe o) -> e m a -> m o
-step' f = step $ lower . lift @_ @_ @_ @e f
+stepS :: forall a s o m e. MonadEnv s o m e => (a -> StateT s Maybe o) -> e m a -> m o
+stepS f = step $ lower . liftS @_ @_ @_ @e f
 
 stepE :: (MonadEnv s o m e, MonadThrow m) => (a -> Maybe o) -> e m a -> m o
 stepE f = step $ maybe (throwM EpisodeCompleted) return . f
@@ -115,6 +111,13 @@ shift'' f = shift . f $ (maybe (throwM EpisodeOver) return .)
 
 bar :: MonadEnv s o Maybe e => e Maybe s
 bar = shift' $ viewEnv
+
+views :: forall s o m e. MonadEnv s o m e => (s -> Maybe o) -> m o
+views = lower @_ @_ @_ @e . view
+
+-- A version of 'views' specialized to evironments where the full state is visible to an agent.
+views' :: forall s m e. MonadEnv s s m e => (s -> Bool) -> m s
+views' = views @_ @_ @_ @e . simple 
 
 viewShift :: (MonadEnv s o m e, MonadThrow m) => ((s -> m o) -> e m o) -> (s -> Maybe o) -> m o
 viewShift f g = lower $ f $ maybe (throwM EpisodeCompleted) return . g

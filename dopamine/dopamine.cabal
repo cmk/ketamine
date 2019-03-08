@@ -23,7 +23,10 @@ library
       Numeric.Dopamine.Agent
       Numeric.Dopamine.Environment
       Numeric.Dopamine.Environment.Class
+      Numeric.Dopamine.Environment.State
       Numeric.Dopamine.Episode
+      Numeric.Dopamine.Exception
+      Numeric.Dopamine.Outcome
       
   hs-source-dirs:
       src
@@ -50,6 +53,7 @@ executable bandits
       base >=4.9 && <5.0
     , containers
     , dlist
+    , dopamine
     , hashable
     , mmorph
     , mtl

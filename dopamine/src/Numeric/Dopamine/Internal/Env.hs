@@ -15,8 +15,7 @@
 
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-
-module Numeric.Dopamine.Environment where
+module Numeric.Dopamine.Internal.Env where
 
 import Control.Applicative (Alternative(..),liftA2)
 import Control.Exception.Safe 
@@ -280,6 +279,7 @@ withEnvT ::
 
 --step :: forall t r o m a. MonadEnv t r o m => m a -> (a -> State m o) -> State m o
 --step = withEnv @t
+
 
 
 

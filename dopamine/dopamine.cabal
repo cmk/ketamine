@@ -19,7 +19,12 @@ source-repository head
 
 library
   exposed-modules:
-      Numeric.Dopamine.Environment
+      Numeric.Dopamine
+      Numeric.Dopamine.Agent
+      Numeric.Dopamine.Env
+      Numeric.Dopamine.Episode
+      
+      Numeric.Dopamine.Internal.Env
   hs-source-dirs:
       src
   default-extensions: MultiParamTypeClasses OverloadedStrings LambdaCase TypeFamilies

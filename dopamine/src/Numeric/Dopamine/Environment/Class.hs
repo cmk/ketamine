@@ -155,39 +155,50 @@ instance PrimMonad m => PrimMonad (EnvT i o m) where
 runEnvT :: Monad m => EnvT () Void m r -> m r
 runEnvT = P.runEffect . unEnvT
 
-class (MMonad (e i o), Monad (m s)) => MonadEnv e i o m s where
-
-  interactEnv :: e () Void (m s) r -> m s r
-
-  respond :: o -> e i o (m s) i
-
-  viewEnv :: (s -> m s (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
-
-instance MonadState s (m s) => MonadEnv (P.Proxy Void ()) i o m s where
-
-  interactEnv = P.runEffect --runEnvT -- evalState (runEnvT e)
-
-  respond = P.respond
-
-class (MMonad (a i o), Monad (m s)) => MonadAgent a i o m s where
-
-  request :: i -> a i o (m s) o
+runAgnT :: Monad m => AgnT Void () m r -> m r
+runAgnT = P.runEffect . unAgnT
 
 
-instance MonadState s (m s) => MonadAgent AgnT i o m s where
+class (MMonad (e i o), Monad m) => MonadEnv e i o m where
+
+  lowerE :: e () Void m r -> m r
+
+  respondE :: o -> e i o m i
+
+  --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
+
+instance Monad m => MonadEnv EnvT i o m where
+
+  lowerE = runEnvT -- evalState (runEnvT e)
+
+  respondE = EnvT . P.respond
+
+class (MMonad (a i o), Monad m) => MonadAgent a i o m where
+
+  lowerA :: a Void () m r -> m r
+
+  requestA :: i -> a i o m o
 
 
+instance Monad m => MonadAgent AgnT i o m where
+
+  lowerA = runAgnT
+
+  requestA = AgnT . P.request
+
+class (MonadAgent a i o m, MonadEnv e i o m) => MonadEpisode a e i o m where
+
+  episode :: (i -> e i o m r) -> a i o m r -> m r
+
+
+instance Monad m => MonadEpisode AgnT EnvT i o m where
+  
+  episode e a = P.runEffect $ (unEnvT . e) P.+>> (unAgnT a)
 
 {-
-class (MonadAgent a i o m, MonadEnv e i o m) =>
-  MonadEpisode a e i o m where
-
-  interact :: (i -> e i o m r) -> a i o m r -> m r
-
-interact 
-  :: MonadEnv   e i o m s
-  => MonadAgent a i o m s'
-  => 
+episode
+  :: MonadEnv   e i o m
+  => MonadAgent a i o m
   => (i -> e i o m r) -> a i o m r -> m r
 -}
 

@@ -159,48 +159,64 @@ runAgnT :: Monad m => AgnT Void () m r -> m r
 runAgnT = P.runEffect . unAgnT
 
 
-class (MMonad (e i o), Monad m) => MonadEnv e i o m where
+class MMonad (e i o) => MonadEnv e i o where
 
-  lowerE :: e () Void m r -> m r
+  lowerE :: Monad m => e () Void m r -> m r
 
-  respondE :: o -> e i o m i
+  respondE :: Monad m => o -> e i o m i
 
   --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
 
-instance Monad m => MonadEnv EnvT i o m where
+instance MonadEnv EnvT i o where
 
   lowerE = runEnvT -- evalState (runEnvT e)
 
   respondE = EnvT . P.respond
 
-class (MMonad (a i o), Monad m) => MonadAgent a i o m where
+class MMonad (a i o) => MonadAgent a i o where
 
-  lowerA :: a Void () m r -> m r
+  lowerA :: Monad m => a Void () m r -> m r
 
-  requestA :: i -> a i o m o
+  requestA :: Monad m => i -> a i o m o
 
 
-instance Monad m => MonadAgent AgnT i o m where
+instance MonadAgent AgnT i o where
 
   lowerA = runAgnT
 
   requestA = AgnT . P.request
 
-class (MonadAgent a i o m, MonadEnv e i o m) => MonadEpisode a e i o m where
 
-  episode :: (i -> e i o m r) -> a i o m r -> m r
+newtype EpisodeT m r = EpisodeT { unEpisodeT :: P.Effect m r }
+  deriving
+    ( Functor
+    , Applicative
+    , MFunctor
+    , MMonad
+    , Monad
+    , MonadCatch
+    , MonadIO
+    , MonadThrow
+    , MonadTrans
+    )
 
+class MMonad p => MonadEpisode p a e where 
 
-instance Monad m => MonadEpisode AgnT EnvT i o m where
+  episode
+    :: Monad m 
+    => MonadEnv   e i o
+    => MonadAgent a i o
+    => (i -> e i o m r) -> a i o m r -> p m r
+
+  run :: Monad m => p m r -> m r
+
+instance MonadEpisode EpisodeT AgnT EnvT where
   
-  episode e a = P.runEffect $ (unEnvT . e) P.+>> (unAgnT a)
+  episode e a = EpisodeT $ unEnvT . e P.+>> unAgnT a
 
-{-
-episode
-  :: MonadEnv   e i o m
-  => MonadAgent a i o m
-  => (i -> e i o m r) -> a i o m r -> m r
--}
+  run = P.runEffect . unEpisodeT
+
+
 
 {-
 request :: Monad m => a' -> Proxy a' a y' y m a

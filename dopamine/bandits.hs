@@ -97,7 +97,7 @@ main = do
   bandit <- defaultBanditState narms
   -- bandit <- banditState narms (Stats 0 10.0) -- TODO randomize in case of ties
 
-  res <- runEnvironment bandit casino act3
+  res <- runEnvironment bandit casino act1
   mapM_ print $ D.toList res
 
 {-
@@ -127,24 +127,21 @@ runEnvironment
   -> EnvState -> Environment a -> IO (D.DList Outcome)
 runEnvironment bs es (Environment m) = snd <$> evalRWST m bs es
 
+
 act1 :: Environment ()
-act1 = void $ concatM (replicate 100 (stepEnv >=> stepBandit 0.1)) 9
+act1 = episode (O.Outcome 0 0) stepEnv (stepBandit 0.1)
 
-act2 :: Environment ()
-act2 = void $ iterateUntilM (==0) (stepEnv >=> stepBandit 0.1) 9
 
-act3 :: Environment ()
-act3 = action (pure 9 :: EnvT (Maybe Outcome) Environment Action) (stepBandit 0.1)
 
-action 
-  :: MonadEnv s Outcome Environment e 
-  => e Environment Action
-  -> (Outcome -> Environment Action) -> Environment ()
-action = whileJust_ . initialize
 
-initialize :: MonadEnv s Outcome Environment e => e Environment Action -> Environment (Maybe Outcome) 
-initialize = lower . step stepEnv'
-
+episode :: Monad m => o -> (a -> m (Maybe o)) -> (o -> m a) -> m ()
+episode o p f = go o
+  where go o = do
+          a <- f o
+          mo <- p a
+          case mo of
+              Nothing -> return ()
+              Just o' -> go o'
 
 ------------------------------------------------------------------------------
 
@@ -157,18 +154,14 @@ instance Show EnvState where
       show (fmap Dist.mean . V.toList $ arms c) ++ 
         ", pulls = " ++ show (pulls c) ++ " }"
 
-stepEnv' :: Action -> Environment (Maybe Outcome)
-stepEnv' action = do
-  rwd <- genContVar =<< (! action) . arms <$> get
-  modify $ \(EnvState a g p) -> EnvState a g (p+1)
-  n <- gets pulls
-  return $ if n >= episodeLength then Nothing else Just $ O.Outcome action rwd
-
-stepEnv :: Action -> Environment Outcome
+stepEnv :: Action -> Environment (Maybe Outcome)
 stepEnv action = do
   rwd <- genContVar =<< (! action) . arms <$> get
   modify $ \(EnvState a g p) -> EnvState a g (p+1)
-  return $ O.Outcome action rwd
+  r <- ask
+  liftIO $ modifyIORef r $ addStats action (Stats action rwd)
+  n <- gets pulls
+  return $ if n >= episodeLength then Nothing else Just $ O.Outcome action rwd
 
 genContVar :: Dist.ContGen d => d -> Environment Double
 genContVar d = do
@@ -180,13 +173,15 @@ genContVar d = do
 
 stepBandit :: Float -> Outcome -> Environment Action 
 stepBandit eps o@(O.Outcome action rwd) = do
-  r <- ask
-  liftIO $ modifyIORef r $ addStats action (Stats action rwd)
-  tell . pure $ o
-  s <- liftIO $ readIORef r
-  let rwds = Map.map mean s
-  a <- epsilonGreedy (Map.toList rwds) eps
-  return a
+    tell . pure $ o
+    r <- ask
+    liftIO $ modifyIORef r $ addStats action (Stats action rwd)
+    s <- liftIO $ readIORef r
+    let rwds = Map.map mean s
+    --liftIO $ print $ "rewards: " ++ show rwds
+    -- modify $ \(EnvState a g p) -> EnvState a g (p+1)
+    a <- epsilonGreedy (Map.toList rwds) eps
+    return a
 
 epsilonGreedy
   :: (R.Variate e, Ord e, Ord r) 

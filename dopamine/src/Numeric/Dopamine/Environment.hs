@@ -46,8 +46,7 @@ viewEnv ::
 
 withEnv :: ((b -> m (Maybe o)) -> a -> m (Maybe o)) -> e m a -> e m b
 -}
-
--- whileJust_ :: Monad m => m (Maybe a) -> (a -> m b) -> m ()
+{-
 simple :: (t -> Bool) -> t -> Maybe t
 simple f s = if f s then Just s else Nothing
 
@@ -105,7 +104,7 @@ stepS f = step $ lower . liftS @_ @_ @_ @e f
 -- TODO how does this use the default? sig is identical to stepS
 stepS' :: (MonadEnv s o m e, Default s) => (a -> StateT s Maybe o) -> e m a -> e m (Maybe o)
 stepS' f = step $ return . runWithDefault f
-
+-}
 
 {-
 

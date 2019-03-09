@@ -25,11 +25,10 @@ import Control.Monad
 import Control.Monad.Cont.Class 
 import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
-import Control.Monad.Morph 
+import Control.Monad.Morph -- (MFunctor(..), MMonad(..), MonadTrans(..)) 
 import Control.Monad.Primitive
 import Control.Monad.Reader.Class (MonadReader(..))
 import Control.Monad.State.Class (MonadState(..))
---import Control.Monad.Trans.Class (MonadTrans)
 import Control.Monad.Trans.Cont (ContT(..), runContT)
 import Control.Monad.Trans.Identity (IdentityT(..), mapIdentityT)
 import Control.Monad.Trans.Maybe
@@ -84,38 +83,69 @@ fromSocketN sock = loop where
 
 --(>\\) = P.(>\\)
 
-s :: MonadIO m => Int -> P.Server' Int Int m ()
-s = loop where
-    loop = \i -> do
-        liftIO $ print i --bs <- liftIO (NSB.recv sock nbytes)
-        if i > 9
-           then return ()
-           else P.respond (i + 1) >>= loop
+newtype EnvT i o m r = EnvT { unEnvT :: ReaderT i (P.Server i o m) r }
+  deriving
+    ( Functor
+    , Applicative
+    --, MFunctor
+    --, MMonad
+    , Monad
+    , MonadCatch
+    , MonadIO
+    , MonadThrow
+    --, MonadTrans
+    )
 
-s' :: MonadState Int m => Int -> P.Server' Int Int m Int
-s' = loop where
-    loop = \i -> do
-        if i > 9
-           then return i
-           else State.modify (+ i) >> P.respond (i + 1) >>= loop
+mapEnvT :: (P.Server i o m a -> P.Server i o n b) -> EnvT i o m a -> EnvT i o n b
+mapEnvT f e = undefined
+  EnvT $ ReaderT $ \inp ->
+    f (runReaderT (unEnvT e) inp)
 
---c :: MonadIO m => P.Client' Int Int m ()
-c :: MonadState Int m => P.Client' Int Int m Int
-c = (State.get >>= P.request) >>= loop
-  where
-    loop i = (State.get >>= \j -> State.put (i+j) >> P.request (i + j + 1) ) >>= loop
+instance MonadTrans (EnvT i o) where
+  lift = liftEnvT . Trans.lift
 
-go :: State Int Int
-go = P.runEffect $ s' P.+>> c
- 
---c = P.request 1
---foo = (\i -> if i >= 10 then P.respond 0 else P.respond (i + 1)) P.+>> P.request 1
+instance MFunctor (EnvT i o) where
+  hoist f =
+    mapEnvT (hoist f)
 
-f :: P.Proxy () Integer () Integer Maybe r
-f = P.mapM $ \i -> if i >= 10 then Nothing else Just (i + 1)
+instance MMonad (EnvT i o) where
+  embed f = undefined
+
+--deriving instance MonadState s m => MonadState s (EnvT i o m)
+--deriving instance MonadReader r m => MonadReader r (EnvT i o m)
+
+liftEnvT :: P.Server i o m r -> EnvT i o m r 
+liftEnvT s = EnvT $ ReaderT $ \_ -> s 
+
+instance PrimMonad m => PrimMonad (EnvT i o m) where
+
+  type PrimState (EnvT i o m) = PrimState m
+  
+  primitive = Trans.lift . primitive
 
 
--- 
+class MMonad (e i o) => MonadEnv e i o where
+
+  lowerE :: Monad m => e () Void m r -> m r
+
+  respondE :: Monad m => o -> e i o m i
+
+  --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
+
+
+instance MonadEnv EnvT i o where
+
+  lowerE = runEnvT -- evalState (runEnvT e)
+
+  respondE = liftEnvT . P.respond
+
+
+runEnvT :: Monad m => EnvT () Void m r -> m r
+runEnvT = P.runEffect . (`runReaderT` ()) . unEnvT
+
+-------------------------------------------------------------------------------
+-- | 
+
 newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
   deriving
     ( Functor
@@ -129,49 +159,16 @@ newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
     , MonadTrans
     )
 
-newtype EnvT i o m r = EnvT { unEnvT :: P.Server i o m r }
-  deriving
-    ( Functor
-    , Applicative
-    , MFunctor
-    , MMonad
-    , Monad
-    , MonadCatch
-    , MonadIO
-    , MonadThrow
-    , MonadTrans
-    )
-
-deriving instance MonadState s m => MonadState s (EnvT i o m)
-deriving instance MonadReader r m => MonadReader r (EnvT i o m)
+deriving instance MonadState s m => MonadState s (AgnT i o m)
+deriving instance MonadReader r m => MonadReader r (AgnT i o m)
 
 
-instance PrimMonad m => PrimMonad (EnvT i o m) where
+instance PrimMonad m => PrimMonad (AgnT i o m) where
 
-  type PrimState (EnvT i o m) = PrimState m
+  type PrimState (AgnT i o m) = PrimState m
   
   primitive = Trans.lift . primitive
 
-runEnvT :: Monad m => EnvT () Void m r -> m r
-runEnvT = P.runEffect . unEnvT
-
-runAgnT :: Monad m => AgnT Void () m r -> m r
-runAgnT = P.runEffect . unAgnT
-
-
-class MMonad (e i o) => MonadEnv e i o where
-
-  lowerE :: Monad m => e () Void m r -> m r
-
-  respondE :: Monad m => o -> e i o m i
-
-  --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
-
-instance MonadEnv EnvT i o where
-
-  lowerE = runEnvT -- evalState (runEnvT e)
-
-  respondE = EnvT . P.respond
 
 class MMonad (a i o) => MonadAgent a i o where
 
@@ -185,6 +182,13 @@ instance MonadAgent AgnT i o where
   lowerA = runAgnT
 
   requestA = AgnT . P.request
+
+
+runAgnT :: Monad m => AgnT Void () m r -> m r
+runAgnT = P.runEffect . unAgnT
+
+-----------------------------------------------------------------------------------------
+-- | 
 
 
 newtype EpisodeT m r = EpisodeT { unEpisodeT :: P.Effect m r }
@@ -206,17 +210,41 @@ class MMonad p => MonadEpisode p a e where
     :: Monad m 
     => MonadEnv   e i o
     => MonadAgent a i o
-    => (i -> e i o m r) -> a i o m r -> p m r
+    => e i o m r -> a i o m r -> p m r
 
   run :: Monad m => p m r -> m r
 
 instance MonadEpisode EpisodeT AgnT EnvT where
   
-  episode e a = EpisodeT $ unEnvT . e P.+>> unAgnT a
+  episode e a = EpisodeT $ (runReaderT . unEnvT) e P.+>> unAgnT a
 
   run = P.runEffect . unEpisodeT
 
 
+{-
+s :: EnvT Int Int (StateT Int IO) Int
+s = loop where
+    loop = \i -> do
+         liftIO $ print i 
+         if i > 9
+             then return i
+             else State.modify (+ i) >> respondE (i + 1) >>= loop
+
+c :: AgnT Int Int (State Int) Int
+c = (State.get >>= requestA) >>= loop
+  where
+    loop i = (State.get >>= \j -> State.put (i+j) >> requestA (i + j + 1) ) >>= loop
+
+ep :: EpisodeT (StateT Int IO) Int
+ep = episode s $ hoist (hoist generalize) c
+
+--ep' :: EpisodeT (StateT Int (StateT Int IO)) Int
+--ep' = episode $ hoist lift s $ hoist (hoist generalize) c
+
+
+go :: (StateT Int IO) Int
+go = run @_ @AgnT @EnvT ep --P.runEffect $ s' P.+>> c
+-}
 
 {-
 request :: Monad m => a' -> Proxy a' a y' y m a

@@ -33,7 +33,7 @@ import Control.Monad.Trans.Cont (ContT(..), runContT)
 import Control.Monad.Trans.Identity (IdentityT(..), mapIdentityT)
 import Control.Monad.Trans.Maybe
 --import Control.Monad.Trans.Resource (MonadResource(..))
-import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Reader (ReaderT(..))
 import Control.Monad.Trans.State
 import Data.Default
 import Data.Functor.Identity
@@ -43,6 +43,7 @@ import Data.Void
 import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
 import qualified Control.Monad.Catch as Catch
+import qualified Control.Monad.Reader.Class as Reader
 import qualified Control.Monad.State.Class as State 
 import qualified Control.Monad.Trans.Class as Trans
 
@@ -96,6 +97,19 @@ newtype EnvT i o m r = EnvT { unEnvT :: ReaderT i (P.Server i o m) r }
     --, MonadTrans
     )
 
+deriving instance MonadState s m => MonadState s (EnvT i o m)
+
+--deriving instance MonadReader r m => MonadReader r (EnvT i o m)
+instance Monad m => MonadReader i (EnvT i o m) where
+  ask = EnvT Reader.ask
+  local f m = EnvT $ Reader.local f (unEnvT m)
+
+{-
+instance MonadReader r m => MonadReader r (EnvT i o m) where
+  ask = Trans.lift ask
+  local f m = mapEnvT (Reader.local f) m
+-}
+
 mapEnvT :: (P.Server i o m a -> P.Server i o n b) -> EnvT i o m a -> EnvT i o n b
 mapEnvT f e = undefined
   EnvT $ ReaderT $ \inp ->
@@ -108,6 +122,7 @@ instance MFunctor (EnvT i o) where
   hoist f =
     mapEnvT (hoist f)
 
+-- TODO implement
 instance MMonad (EnvT i o) where
   embed f = undefined
 
@@ -221,29 +236,40 @@ instance MonadEpisode EpisodeT AgnT EnvT where
   run = P.runEffect . unEpisodeT
 
 
-{-
+
 s :: EnvT Int Int (StateT Int IO) Int
 s = loop where
-    loop = \i -> do
-         liftIO $ print i 
-         if i > 9
-             then return i
-             else State.modify (+ i) >> respondE (i + 1) >>= loop
+    loop = do
+       i <- Reader.ask
+       liftIO $ print i 
+       if i > 9
+           then return i
+           else State.modify (+ i) >> respondE (i + 1) >> loop --TODO looks wrong
 
 c :: AgnT Int Int (State Int) Int
 c = (State.get >>= requestA) >>= loop
   where
     loop i = (State.get >>= \j -> State.put (i+j) >> requestA (i + j + 1) ) >>= loop
 
-ep :: EpisodeT (StateT Int IO) Int
-ep = episode s $ hoist (hoist generalize) c
+ep1 :: EpisodeT (StateT Int IO) Int
+ep1 = episode s $ hoist (hoist generalize) c
 
---ep' :: EpisodeT (StateT Int (StateT Int IO)) Int
---ep' = episode $ hoist lift s $ hoist (hoist generalize) c
+go1 :: StateT Int IO Int
+go1 = run @_ @AgnT @EnvT ep1
+
+ep2 :: EpisodeT (StateT Int (StateT Int IO)) Int
+ep2 = episode (hoist lift s) (hoist lift $ hoist (hoist generalize) c)
+
+go2 :: StateT Int (StateT Int IO) Int
+go2 = run @_ @AgnT @EnvT ep2
 
 
-go :: (StateT Int IO) Int
-go = run @_ @AgnT @EnvT ep --P.runEffect $ s' P.+>> c
+{-
+
+
+
+
+
 -}
 
 {-

@@ -97,17 +97,29 @@ main = do
   bandit <- defaultBanditState narms
   -- bandit <- banditState narms (Stats 0 10.0) -- TODO randomize in case of ties
 
-  res <- runEnvironment bandit casino act1
+  res <- runEnvironment bandit casino act3
   mapM_ print $ D.toList res
 
+{-
 askEnv :: (MonadEnv EnvState Outcome m e) => e m Outcome
 askEnv = view $ \s -> 
   if pulls s <= episodeLength then Just $ O.Outcome 0 0 else Nothing
 
-respond 
-  :: MonadEnv s Outcome Environment e 
-  => e Environment Action -> Environment Outcome
-respond = step stepEnv 
+-- whileJust_ :: Monad m => m (Maybe a) -> (a -> m b) -> m ()
+--
+
+config stepEnv'
+  :: MonadEnv s Outcome Environment e =>
+     e Environment Action -> e Environment b
+
+step stepEnv'
+  :: MonadEnv s Outcome Environment e =>
+     e Environment Action -> e Environment (Maybe Outcome)
+
+lower . step stepEnv'
+  :: MonadEnv s Outcome Environment e =>
+     e Environment Action -> Environment (Maybe Outcome) 
+-}
 
 -- | Run an n-armed bandit environment
 runEnvironment 
@@ -121,6 +133,19 @@ act1 = void $ concatM (replicate 100 (stepEnv >=> stepBandit 0.1)) 9
 act2 :: Environment ()
 act2 = void $ iterateUntilM (==0) (stepEnv >=> stepBandit 0.1) 9
 
+act3 :: Environment ()
+act3 = action (pure 9 :: EnvT (Maybe Outcome) Environment Action) (stepBandit 0.1)
+
+action 
+  :: MonadEnv s Outcome Environment e 
+  => e Environment Action
+  -> (Outcome -> Environment Action) -> Environment ()
+action = whileJust_ . initialize
+
+initialize :: MonadEnv s Outcome Environment e => e Environment Action -> Environment (Maybe Outcome) 
+initialize = lower . step stepEnv'
+
+
 ------------------------------------------------------------------------------
 
 data EnvState = 
@@ -131,6 +156,13 @@ instance Show EnvState where
     "{ means = " ++ 
       show (fmap Dist.mean . V.toList $ arms c) ++ 
         ", pulls = " ++ show (pulls c) ++ " }"
+
+stepEnv' :: Action -> Environment (Maybe Outcome)
+stepEnv' action = do
+  rwd <- genContVar =<< (! action) . arms <$> get
+  modify $ \(EnvState a g p) -> EnvState a g (p+1)
+  n <- gets pulls
+  return $ if n >= episodeLength then Nothing else Just $ O.Outcome action rwd
 
 stepEnv :: Action -> Environment Outcome
 stepEnv action = do

@@ -40,11 +40,11 @@ import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 import qualified Control.Monad.Trans.Class as Trans
 
 {-
-  lowerEnv :: e m (Maybe o) -> m (Maybe o)
+lowerEnv :: e m (Maybe o) -> m (Maybe o)
 
-  viewEnv :: 
+viewEnv :: 
 
-  withEnv :: ((b -> m (Maybe o)) -> a -> m (Maybe o)) -> e m a -> e m b
+withEnv :: ((b -> m (Maybe o)) -> a -> m (Maybe o)) -> e m a -> e m b
 -}
 
 -- whileJust_ :: Monad m => m (Maybe a) -> (a -> m b) -> m ()
@@ -113,6 +113,7 @@ stepS' f = step $ return . runWithDefault f
 reset :: Monad m => EnvT a m a -> EnvT a' m a
 reset e = Trans.lift $ runEnvT e return
 
+-- TODO: use this to reset env somehow?
 shift :: MonadEnv s o m e => ((s -> m o) -> e m o) -> e m s
 shift = undefined
 

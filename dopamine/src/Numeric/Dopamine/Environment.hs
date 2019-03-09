@@ -39,60 +39,76 @@ import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
 import qualified Control.Monad.Trans.Class as Trans
 
+{-
+  lowerEnv :: e m (Maybe o) -> m (Maybe o)
 
-lift :: MonadEnv s o m e => m o -> e m o
-lift = Trans.lift
+  viewEnv :: 
 
-lower :: MonadEnv s o m e => e m o -> m o
-lower = lowerEnv
+  withEnv :: ((b -> m (Maybe o)) -> a -> m (Maybe o)) -> e m a -> e m b
+-}
 
-over :: MonadEnv s o m e => (m o -> m o) -> e m a -> e m a
-over f = withEnv (f .)
-
-view :: MonadEnv s o m e => (s -> Maybe o) -> e m o
-view = viewEnv
-
--- A version of 'view' specialized to evironments where the full state is visible to an agent.
-view' :: MonadEnv s s m e => (s -> Bool) -> e m s
-view' = view . simple
-
+-- whileJust_ :: Monad m => m (Maybe a) -> (a -> m b) -> m ()
 simple :: (t -> Bool) -> t -> Maybe t
 simple f s = if f s then Just s else Nothing
+
+runStep :: (a -> StateT s Maybe o) -> a -> s -> Maybe o
+runStep f a s = fmap fst . (`runStateT` s) $ f a
+
+runWithDefault :: Default s => (a -> StateT s Maybe o) -> a -> Maybe o
+runWithDefault f a = runStep f a def
+
+lift :: MonadEnv s o m e => m a -> e m a
+lift = Trans.lift
+
+lower :: MonadEnv s o m e => e m (Maybe o) -> m (Maybe o) 
+lower = lowerEnv
+
+over :: MonadEnv s o m e => (m (Maybe o) -> m (Maybe o)) -> e m a -> e m a
+over f = withEnv (f .)
+
+config :: MonadEnv s o m e => (a -> m (Maybe o)) -> e m a -> e m b
+config f = withEnv $ const f 
+
+configS :: (MonadEnv s o m e, Default s) => (a -> StateT s Maybe o) -> e m a -> e m b
+configS f = config $ return . runWithDefault f 
+
+view :: MonadEnv s o m e => (s -> m (Maybe o)) -> e m (Maybe o)
+view = viewEnv
+
+-- A version of 'view' specialized to simple evironments.
+view' :: MonadEnv s s m e => (s -> Bool) -> e m (Maybe s)
+view' f = view $ return . simple f
 
 -----------------------------------------------------------------------------------------
 -- | Lift a pure state transition into an environment.
 --
 -- The 'State' monad provides a minimal DSL sufficient for describing simple environments.
-liftS :: MonadEnv s o m e => (a -> StateT s Maybe o) -> a -> e m o
-liftS f a = view $ runStep f a
+
+liftS :: MonadEnv s o m e => (a -> StateT s Maybe o) -> a -> e m (Maybe o)
+liftS f a = view $ return . runStep f a
 
 -- A version of 'liftS' specialized to evironments where the full state is visible to an agent.
-liftS' :: MonadEnv s s m e => (a -> StateT s Maybe o) -> a -> e m s
+liftS' :: MonadEnv s s m e => (a -> StateT s Maybe o) -> a -> e m (Maybe s)
 liftS' f a = view' . (isJust .) $ runStep f a
 
-runStep :: (a -> StateT s Maybe o) -> a -> s -> Maybe o
-runStep f a s = fmap fst . (`runStateT` s) $ f a
+-----------------------------------------------------------------------------------------
+-- | Step through an environment using a transition function.
 
 -- | Use a state transition to advance an environment one step.
-step :: MonadEnv s o m e => (a -> m o) -> e m a -> m o
-step f = lower . withEnv (const f)
+step :: MonadEnv s o m e => (a -> m (Maybe o)) -> e m a -> e m (Maybe o)
+step f = withEnv (const f)
 
 -- | Use a pure state transition to advance an environment one step.
-stepS :: forall a s o m e. MonadEnv s o m e => (a -> StateT s Maybe o) -> e m a -> m o
+stepS :: forall a s o m e. MonadEnv s o m e => (a -> StateT s Maybe o) -> e m a -> e m (Maybe o)
 stepS f = step $ lower . liftS @_ @_ @_ @e f
 
-stepE :: (MonadEnv s o m e, MonadThrow m) => (a -> Maybe o) -> e m a -> m o
-stepE f = step $ maybe (throwM EpisodeCompleted) return . f
-
-stepE' :: (MonadEnv s s m e, MonadThrow m) => (s -> Bool) -> e m s -> m s
-stepE' = stepE . simple
-
+-- TODO how does this use the default? sig is identical to stepS
+stepS' :: (MonadEnv s o m e, Default s) => (a -> StateT s Maybe o) -> e m a -> e m (Maybe o)
+stepS' f = step $ return . runWithDefault f
 
 
 {-
 
-step'' :: (MonadEnv s o m e, MonadThrow m, Default s) => (a -> StateT s Maybe o) -> e m a -> m o
-step'' f = stepE $ \a -> runStep f a def
 
 reset :: Monad m => EnvT a m a -> EnvT a' m a
 reset e = Trans.lift $ runEnvT e return

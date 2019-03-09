@@ -75,19 +75,18 @@ instance PrimMonad m => PrimMonad (EnvT o m) where
 
 class (Monad m, MonadTrans e) => MonadEnv s o m e | m -> s, e -> o where
 
-  lowerEnv :: e m o -> m o
+  lowerEnv :: e m (Maybe o) -> m (Maybe o)
 
-  viewEnv :: (s -> Maybe o) -> e m o
+  viewEnv :: (s -> m (Maybe o)) -> e m (Maybe o)
 
-  withEnv :: ((b -> m o) -> a -> m o) -> e m a -> e m b
+  withEnv :: ((b -> m (Maybe o)) -> a -> m (Maybe o)) -> e m a -> e m b
 
 
-instance (MonadThrow m, MonadState s m) => MonadEnv s o m (EnvT o) where
+instance MonadState s m => MonadEnv s o m (EnvT (Maybe o)) where
 
   lowerEnv e = runEnvT e return
 
-  -- | view the current reward and/or observable state
-  viewEnv v = Trans.lift $ do { s <- State.get; maybe (throwM EpisodeCompleted) return . v $ s }
+  viewEnv v = Trans.lift $ State.get >>= v
 
   withEnv f e = EnvT . ContT $ runEnvT e . f
 

@@ -65,15 +65,18 @@ type Outcome = O.Outcome Action Double
 type BanditEnv = EnvT Outcome Environment
 
 -- | Default config of a n-armed bandit
-defaultEnvState :: Int -> IO EnvState
-defaultEnvState n = mkEnvState n $ replicate n 1.0
+envState :: Int -> IO EnvState
+envState n = mkEnvState n $ replicate n 1.0
 
-defaultBanditState :: Int -> IO (IORef BanditState)
-defaultBanditState n = do
+banditState :: Int -> Stats -> IO (IORef BanditState)
+banditState n s = do
   r <- newIORef mempty
-  let init = Map.fromList $ take n $ zip [0..] (repeat mempty)
+  let init = Map.fromList $ take n $ zip [0..] (repeat s)
   writeIORef r init
   return r
+
+defaultBanditState :: Int -> IO (IORef BanditState)
+defaultBanditState n = banditState n mempty
 
 mkEnvState :: Int -> [Double] -> IO EnvState
 mkEnvState n vars = do
@@ -90,8 +93,9 @@ narms = 10
 
 main :: IO ()
 main = do
-  casino <- defaultEnvState narms
+  casino <- envState narms
   bandit <- defaultBanditState narms
+  -- bandit <- banditState narms (Stats 0 10.0) -- TODO randomize in case of ties
 
   res <- runEnvironment bandit casino act1
   mapM_ print $ D.toList res

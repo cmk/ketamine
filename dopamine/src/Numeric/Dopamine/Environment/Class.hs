@@ -55,7 +55,9 @@ import qualified Pipes.Core as P
 
 
 --(>\\) = P.(>\\)
-
+-- EnT
+-- -- tic tac toe ex
+-- leave EnT and AgT together
 newtype EnvT i o m r = EnvT { unEnvT :: P.Server i o m r }
   deriving  ( Functor
             , Applicative
@@ -141,6 +143,7 @@ fy \<\ fx = fx />/ fy
 -----------------------------------------------------------------------------------------
 -- | 
 
+-- Agt 
 newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
   deriving  ( Functor
             , Applicative
@@ -331,7 +334,7 @@ infixr 6 +>>
 
 (+>>) :: Ep a e i o u m 
       => (i -> e i o m r) -> a i o m r -> u m r 
-f +>> x = withAgent x f
+f +>> a = withAgent a f
 {-# INLINABLE [1] (+>>) #-}
 
 infixr 6 +/>
@@ -352,15 +355,13 @@ f +\> a = below withAgent a f
 {-# INLINABLE [1] (+\>) #-}
 
 
---f ->> a = above withAgent a f
-
 infixl 7 >>~
 
 (>>~) :: Ep a e i o u m => e i o m r -> (o -> a i o m r) -> u m r
 e >>~ f = withEnvironment e f
 
 
-infixl 7 >/-
+infixl 7 >/~
 
 (>/~) :: Conf s t m
       => Ep a e i o u m 
@@ -372,7 +373,7 @@ e >/~ f = above withEnvironment e f
 --infixl 8 <~<
 --infixr 8 >~>
 
-infixl 7 >\-
+infixl 7 >\~
 
 (>\~) :: Conf t s m
       => Ep a e i o u m 
@@ -439,6 +440,12 @@ runWithAgent
   => a i o m r -> (i -> e i o m r) -> m r
 runWithAgent a = runEpisode @u @a @e . withAgent a
 
+{-
+> :t pull
+pull :: Monad m => a' -> Proxy a' a a' a m r
+> :t push
+push :: Monad m => a -> Proxy a' a a' a m r
+-}
 
 
 -- TODO move to readme / put in lhs file

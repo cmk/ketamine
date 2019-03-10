@@ -9,7 +9,9 @@
              TypeFamilies, 
              DeriveFunctor, 
              DeriveGeneric,
-             ScopedTypeVariables, 
+             Rank2Types,
+             ScopedTypeVariables,
+             StandaloneDeriving,
              TypeApplications
 #-}
 
@@ -22,11 +24,11 @@ import Control.Exception.Safe
 import Control.Monad
 import Control.Monad.Cont.Class 
 import Control.Monad.IO.Class
-import Control.Monad.Morph (MFunctor(..), MMonad(..), generalize)
+import Control.Monad.IO.Unlift
+import Control.Monad.Morph -- (MFunctor(..), MMonad(..), MonadTrans(..)) 
 import Control.Monad.Primitive
-import Control.Monad.Reader.Class (MonadReader(..))
-import Control.Monad.State.Class (MonadState(..))
-import Control.Monad.Trans.Class (MonadTrans)
+import Control.Monad.Reader.Class (MonadReader)
+import Control.Monad.State.Class (MonadState)
 import Control.Monad.Trans.Cont (ContT(..), runContT)
 import Control.Monad.Trans.Identity (IdentityT(..), mapIdentityT)
 import Control.Monad.Trans.Maybe
@@ -36,75 +38,486 @@ import Control.Monad.Trans.State
 import Data.Default
 import Data.Functor.Identity
 import Data.Maybe (maybe)
+import Data.Void
+import Data.IORef
+import Pipes.Core (Proxy(..), Server, Client, Effect)
 
 import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
 import qualified Control.Monad.Catch as Catch
-import qualified Control.Monad.State.Class as State 
+import qualified Control.Monad.Reader.Class as R
+import qualified Control.Monad.State.Class as S 
 import qualified Control.Monad.Trans.Class as Trans
+import qualified Pipes.Core as P
 
 
 
-newtype EnvT o m a = EnvT { unEnvT :: ContT o m a }
-  deriving
-    ( Functor
-    , Applicative
-    , Monad
-    --, MonadCatch
-    , MonadCont
-    , MonadIO
-    --, MonadResource
-    , MonadThrow
-    , MonadTrans
-    )
-
-runEnvT :: EnvT o m a -> (a -> m o) -> m o
-runEnvT = runContT . unEnvT
-
-instance MonadState s m => MonadState s (EnvT o m) where
-
-  state = EnvT . State.state
 
 
-instance PrimMonad m => PrimMonad (EnvT o m) where
+--(>\\) = P.(>\\)
+-- EnT
+-- -- tic tac toe ex
+-- leave EnT and AgT together
+newtype EnvT i o m r = EnvT { unEnvT :: P.Server i o m r }
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
 
-  type PrimState (EnvT o m) = PrimState m
+deriving instance MonadState s m => MonadState s (EnvT i o m)
+deriving instance MonadReader r m => MonadReader r (EnvT i o m)
+
+runEnvT :: Monad m => EnvT () Void m r -> m r
+runEnvT = P.runEffect . unEnvT
+
+
+instance PrimMonad m => PrimMonad (EnvT i o m) where
+
+  type PrimState (EnvT i o m) = PrimState m
   
   primitive = Trans.lift . primitive
 
 
-class (Monad m, MonadTrans e) => MonadEnv s o m e | m -> s, e -> o where
+class MMonad (e i o) => MonadEnv e i o where
 
-  lowerEnv :: e m o -> m o
+  bindEnv :: Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
 
-  viewEnv :: (s -> Maybe o) -> e m o
+  lowerEnv :: Monad m => e () Void m r -> m r
 
-  withEnv :: ((b -> m o) -> a -> m o) -> e m a -> e m b
+  respondEnv :: Monad m => o -> e i o m i
+
+  --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
+
+respond :: (MonadEnv e i o, Monad m) => o -> e i o m i
+respond = respondEnv
+
+instance MonadEnv EnvT i o where
+
+  bindEnv e f = EnvT $ unEnvT e P.//> unEnvT . f
+
+  lowerEnv = runEnvT -- evalState (runEnvT e)
+
+  respondEnv = EnvT . P.respond
 
 
-instance (MonadThrow m, MonadState s m) => MonadEnv s o m (EnvT o) where
 
-  lowerEnv e = runEnvT e return
+infixl 3 //>
 
-  -- | view the current reward and/or observable state
-  viewEnv v = Trans.lift $ do { s <- State.get; maybe (throwM EpisodeCompleted) return . v $ s }
+-- | 'MonadEnv' analog of '//<'
+(//>) :: MonadEnv e i o => Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
+e //> f = bindEnv e f
+{-# INLINABLE (//>) #-}
 
-  withEnv f e = EnvT . ContT $ runEnvT e . f
+
+infixl 3 <\\
+
+-- | 'MonadEnv' analog of '>\\'
+(<\\) :: MonadEnv e i o => Monad m => (y -> e i o m x) -> e x y m r -> e i o m r
+f <\\ e = e //> f 
+{-# INLINABLE (<\\) #-}
 
 
-{-
- -
-local' :: MonadEnv s o m e => (t -> m o -> m o) -> t -> e m a -> e m a
-local' f g = withEnv (f g .)
+infixr 4 />/ --
 
-local
-  :: Monad m 
-  => m s
-  -> ((s -> s) -> m o -> m o)
-  -> (s -> s) -> EnvT o m a -> EnvT o m a
-local s f g (EnvT c) = EnvT $ liftLocal a f g c
+-- | 'MonadEnv' analog of '/</'
+(/>/) 
+  :: MonadEnv e i o => Monad m => (x -> e z y m r) -> (y -> e i o m z) -> x -> e i o m r
+fx />/ fy = \x -> fx x //> fy
+{-# INLINABLE (/>/) #-}
+
+
+infixl 4 \<\
+
+-- | 'MonadEnv' analog of '\>\'
+(\<\) 
+  :: MonadEnv e i o => Monad m => (y -> e i o m z) -> (x -> e z y m r) -> x -> e i o m r
+fy \<\ fx = fx />/ fy 
+{-# INLINABLE (\<\) #-}
+
+
+-----------------------------------------------------------------------------------------
+-- | 
+
+-- Agt 
+newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
+
+deriving instance MonadState s m => MonadState s (AgnT i o m)
+deriving instance MonadReader r m => MonadReader r (AgnT i o m)
+
+
+--instance MonadAgent m i o => MonadAgent (IdentityT (m i o)) i o
+runAgnT :: Monad m => AgnT Void () m r -> m r
+runAgnT = P.runEffect . unAgnT
+
+
+instance PrimMonad m => PrimMonad (AgnT i o m) where
+
+  type PrimState (AgnT i o m) = PrimState m
+  
+  primitive = Trans.lift . primitive
+
+
+class MMonad (a i o) => MonadAgent a i o where
+
+  bindAgent :: Monad m => a x y m r -> (x -> a i o m y) -> a i o m r
+
+  lowerAgent :: Monad m => a Void () m r -> m r
+
+  requestAgent :: Monad m => i -> a i o m o
+
+
+instance MonadAgent AgnT i o where
+
+  bindAgent a f = AgnT $ unAgnT a P.//< unAgnT . f
+
+  lowerAgent = runAgnT
+
+  requestAgent = AgnT . P.request
+
+
+request :: (MonadAgent a i o, Monad m) => i -> a i o m o
+request = requestAgent
+
+
+
+{- $request
+    The 'request' category closely corresponds to the iteratee design pattern.
+
+    The 'request' category obeys the category laws, where 'request' is the
+    identity and ('\>\') is composition:
+
+@
+-- Left identity
+'request' '\>\' f = f
+
+\-\- Right identity
+f '\>\' 'request' = f
+
+\-\- Associativity
+(f '\>\' g) '\>\' h = f '\>\' (g '\>\' h)
+@
 
 -}
+
+
+
+
+infixl 4 //<
+
+(//<) 
+  :: MonadAgent a i o => Monad m => a x y m r -> (x -> a i o m y) -> a i o m r
+a //< f = bindAgent a f
+{-# INLINABLE (//<) #-}
+
+
+infixr 4 >\\ --
+ 
+-- | 'MonadAgent' equivalent of '<\\'
+(>\\) 
+  :: MonadAgent a i o => Monad m => (x -> a i o m y) -> a x y m r -> a i o m r
+f >\\ a = a //< f
+{-# INLINABLE (>\\) #-}
+
+
+infixl 5 \>\ --
+
+-- | 'MonadAgent' analog of '\<\'
+(\>\) 
+  :: MonadAgent a i o => Monad m => (y -> a i o m z) -> (x -> a y z m r) -> x -> a i o m r
+fy \>\ fx = \x -> fy >\\ fx x
+{-# INLINABLE (\>\) #-}
+
+
+infixr 5 /</
+
+-- | 'MonadAgent' analog of '/>/'
+(/</) 
+  :: MonadAgent a i o => Monad m => (x -> a y z m r) -> (y -> a i o m z) -> x -> a i o m r
+fx /</ fy = fy \>\ fx
+{-# INLINABLE (/</) #-}
+
+
+
+
+
+-----------------------------------------------------------------------------------------
+-- | 
+
+
+newtype EpisodeT m r = EpisodeT { unEpisodeT :: P.Effect m r }
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
+
+
+class MMonad u => MonadEpisode u a e where 
+
+  runEpisode :: Monad m => u m r -> m r
+
+  withAgent :: Ep a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
+
+  withEnvironment :: Ep a e i o u m => e i o m r -> (o -> a i o m r) -> u m r
+
+
+instance MonadEpisode EpisodeT AgnT EnvT where
+  
+  withAgent a f = EpisodeT $ unAgnT a P.<<+ unEnvT . f
+
+  runEpisode = P.runEffect . unEpisodeT
+
+  withEnvironment e f = EpisodeT $ unEnvT e P.>>~ unAgnT . f
+
+
+type Ep a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u a e)
+
+type Conf s t m = 
+  (Monad (s m), Monad (t m), Monad (s (t m)), MonadTrans s, MonadTrans t, MFunctor s)
+
+
+below :: (MFunctor t1, MFunctor t2, MFunctor t3, Monad m1, Monad m2, Monad (t3 m2), MonadTrans t4, MonadTrans t5) 
+   => (t1 (t4 m1) b1 -> (a -> t2 (t3 (t5 m2)) b2) -> t6)
+   -> t1 m1 b1 -> (a -> t2 (t3 m2) b2) -> t6
+below k x y = k (hoist lift x) $ hoist (hoist lift) . y
+
+
+above  :: (MFunctor t1, MFunctor t2, MFunctor t3, Monad m1, Monad m2, Monad (t3 m2), MonadTrans t4, MonadTrans t5) 
+  => (t1 (t3 (t4 m2)) b1 -> (a -> t2 (t5 m1) b2) -> t6)
+  -> t1 (t3 m2) b1 -> (a -> t2 m1 b2) -> t6
+above k x y = k (hoist (hoist lift) x) $ hoist lift . y
+
+{-
+foo a e = unAgnT . a P.>~> unEnvT . e
+
+\ a e -> EpisodeT $ unAgnT . a P.<~< unEnvT . e
+  :: Monad m =>
+     (o -> a i o m r)
+     -> (() -> e i o m r) -> () -> u m r
+infixl 7 >+>, >>~
+infixr 7 <+<, ~<<
+infixl 8 <~<
+infixr 8 >~>
+
+-}
+
+
+
+{-| Compose two episodes blocked in the middle of 'respond'ing, creating a new
+    episode blocked in the middle of 'respond'ing
+
+@
+(f '>+>' g) x = f '+>>' g x
+@
+
+-}
+
+infixr 6 +>>
+
+(+>>) :: Ep a e i o u m 
+      => (i -> e i o m r) -> a i o m r -> u m r 
+f +>> a = withAgent a f
+{-# INLINABLE [1] (+>>) #-}
+
+infixr 6 +/>
+
+(+/>) :: Conf s t m 
+      => Ep a e i o u m 
+      => (i -> e i o (t m) r) -> a i o (s m) r -> u (s (t m)) r
+f +/> a = above withAgent a f
+{-# INLINABLE [1] (+/>) #-}
+
+
+infixr 6 +\>
+
+(+\>) :: Conf t s m 
+      => Ep a e i o u m 
+      => (i -> e i o (t m) r) -> a i o (s m) r -> u (t (s m)) r
+f +\> a = below withAgent a f
+{-# INLINABLE [1] (+\>) #-}
+
+
+infixl 7 >>~
+
+(>>~) :: Ep a e i o u m => e i o m r -> (o -> a i o m r) -> u m r
+e >>~ f = withEnvironment e f
+
+
+infixl 7 >/~
+
+(>/~) :: Conf s t m
+      => Ep a e i o u m 
+      => e i o (s m) r -> (o -> a i o (t m) r) -> u (s (t m)) r
+e >/~ f = above withEnvironment e f
+
+-- TODO add triples for these as well
+--infixr 7 ~<<
+--infixl 8 <~<
+--infixr 8 >~>
+
+infixl 7 >\~
+
+(>\~) :: Conf t s m
+      => Ep a e i o u m 
+      => e i o (s m) r -> (o -> a i o (t m) r) -> u (t (s m)) r
+e >\~ f = below withEnvironment e f
+
+
+
+infixl 6 <<+
+
+(<<+) :: Ep a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
+x <<+ f = f +>> x
+
+
+
+infixl 6 <\+
+
+(<\+) :: Conf s t m 
+      => Ep a e i o u m 
+      => a i o (s m) r -> (i -> e i o (t m) r) -> u (s (t m)) r
+x <\+ f = f +/> x
+{-# INLINABLE (<\+) #-}
+
+
+
+infixl 7 >+>
+
+(>+>) :: Ep a e i o u m => (i -> e i o m r) -> (o -> a i o m r) -> o -> u m r
+f >+> g = \x -> f +>> g x
+{-# INLINABLE (>+>) #-}
+
+
+infixl 7 /+>
+
+(/+>) :: Conf s t m 
+      => Ep a e i o u m 
+      => (i -> e i o (t m) r) -> (o -> a i o (s m) r) -> o -> u (s (t m)) r
+f /+> g = \x -> f +/> g x
+
+
+infixr 7 <+<
+
+(<+<) :: Ep a e i o u m => (o -> a i o m r) -> (i -> e i o m r) -> o -> u m r
+g <+< f = f >+> g
+
+
+infixr 7 <+\
+
+(<+\) :: Conf s t m 
+      => Ep a e i o u m 
+      => (o -> a i o (s m) r) -> (i -> e i o (t m) r) -> o -> u (s (t m)) r
+g <+\ f = f /+> g
+
+
+reflectEnv :: Monad m => EnvT i o m r -> AgnT o i m r
+reflectEnv = AgnT . P.reflect . unEnvT
+
+reflectAgent :: Monad m => AgnT i o m r -> EnvT o i m r
+reflectAgent = EnvT . P.reflect . unAgnT
+
+runWithAgent 
+  :: forall a e i o u m r . ()
+  => Ep a e i o u m 
+  => a i o m r -> (i -> e i o m r) -> m r
+runWithAgent a = runEpisode @u @a @e . withAgent a
+
+{-
+> :t pull
+pull :: Monad m => a' -> Proxy a' a a' a m r
+> :t push
+push :: Monad m => a -> Proxy a' a a' a m r
+-}
+
+
+-- TODO move to readme / put in lhs file
+-- TODO give example using ether
+en :: Int -> EnvT Int Int (ReaderT (IORef Int) IO) ()
+en = loop where
+    loop = \i -> do
+         r <- lift ask
+         j <- liftIO $ readIORef r
+         liftIO $ print $ "en state: " ++ show j
+         liftIO $ modifyIORef r $ \k -> k - 1
+         if i > 4
+             then return ()
+             else respond i >>= loop
+
+ag :: AgnT Int Int (ReaderT (IORef Int) IO) ()
+ag = request 1 >>= loop where
+    loop _ = do
+         r <- lift ask
+         j <- liftIO $ readIORef r
+         liftIO $ print $ "ag state: " ++ show j
+         liftIO $ modifyIORef r $ \k -> k + 2
+         request j >>= loop
+
+test1 :: IO ()
+test1 = do
+    agr <- newIORef (1 :: Int)
+    let rt :: ReaderT (IORef Int) IO ()
+        rt = runEpisode @EpisodeT @AgnT @EnvT $ en +>> ag
+    runReaderT rt agr
+
+{-
+> test1
+"en state: 1"
+"ag state: 0"
+"en state: 2"
+"ag state: 1"
+"en state: 3"
+"ag state: 2"
+"en state: 4"
+"ag state: 3"
+"en state: 5"
+"ag state: 4"
+"en state: 6"
+"ag state: 5"
+"en state: 7"
+-}
+
+
+
+
+
+
+test2 :: IO ()
+test2 = do
+    agr <- newIORef (1 :: Int)
+    enr <- newIORef (1 :: Int)
+    let rt :: ReaderT (IORef Int) (ReaderT (IORef Int) IO) ()
+        rt = runEpisode @EpisodeT @AgnT @EnvT $ en +/> ag 
+    (`runReaderT` enr) . (`runReaderT` agr) $ rt
+
+{-
+> test2
+"en state: 1"
+"ag state: 1"
+"en state: 0"
+"ag state: 3"
+"en state: -1"
+"ag state: 5"
+"en state: -2"
+-}
+
 
 
 

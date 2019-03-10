@@ -33,18 +33,19 @@ library
   default-extensions: MultiParamTypeClasses OverloadedStrings LambdaCase TypeFamilies
   ghc-options: -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
   build-depends:
-      aeson >=1.0
-    , base >=4.9 && <5.0
+      base >=4.9 && <5.0
+    , conduit
     , data-default
     , exceptions
     , mmorph
     , monad-loops
     , mtl
     , mwc-random
+    , pipes
     , primitive
     , safe-exceptions
     , transformers
-    , vector
+    , unliftio-core
   default-language: Haskell2010
 
 executable bandits

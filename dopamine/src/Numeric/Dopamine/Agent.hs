@@ -36,26 +36,14 @@ import Data.Bool (bool)
 import Data.Default
 import Data.Functor.Identity
 import Data.Maybe
+import Pipes.Core (Proxy(..), Server, Client, Effect)
 
 import qualified Control.Monad.Catch as Catch
 import qualified Control.Monad.State.Class as State 
 import qualified Control.Monad.Trans.Class as Trans
 import qualified System.Random.MWC as R
+import qualified Pipes.Core as P
 
 
 
 
-newtype AgentT o m a = AgnetT { unAgentT :: SelectT o m a }
-  deriving
-    ( Functor
-    , Applicative
-    , Monad
-    --, MonadCatch
-    --, MonadCont
-    , MonadIO
-    --, MonadThrow
-    , MonadTrans
-    )
-
-runAgentT :: AgentT o m a -> (a -> m o) -> m a
-runAgentT = runSelectT . unAgentT

@@ -40,6 +40,7 @@ import Data.Functor.Identity
 import Data.Maybe (maybe)
 import Data.Void
 import Data.IORef
+import Pipes.Core (Proxy(..), Server, Client, Effect)
 
 import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
@@ -47,56 +48,24 @@ import qualified Control.Monad.Catch as Catch
 import qualified Control.Monad.Reader.Class as R
 import qualified Control.Monad.State.Class as S 
 import qualified Control.Monad.Trans.Class as Trans
-
-import Pipes.Core (Proxy(..), Server, Client, Effect)
 import qualified Pipes.Core as P
 
-import qualified Pipes.Prelude as P
 
-{-
- -
- -
-(+>>) 
-  :: Monad m	 
-  => (a -> Server a o m r)	 
-  -> Client a o m r	 
-  -> Effect m r
 
-(\i -> if i >= 10 then respond Nothing else respond $ Just (i + 1)) +>> c
-
-(\i -> if i >= 10 then respond 0 else respond (i + 1)) +>> c
-
-type Client a' a = Proxy a' a () X
-type Server b' b = Proxy X () b' b
-
-todo: what is Server'?
-
-P.stdinLn :: MonadIO m => Proxy x' x () String m ()
-
-fromSocketN :: MonadIO m => Socket -> Int -> Server' Int B.ByteString m ()
-fromSocketN sock = loop where
-    loop = \nbytes -> do
-        bs <- liftIO (NSB.recv sock nbytes)
-        if B.null bs
-           then return ()
-           else respond bs >>= loop
--}
 
 
 --(>\\) = P.(>\\)
 
 newtype EnvT i o m r = EnvT { unEnvT :: P.Server i o m r }
-  deriving
-    ( Functor
-    , Applicative
-    , MFunctor
-    , MMonad
-    , Monad
-    , MonadCatch
-    , MonadIO
-    , MonadThrow
-    , MonadTrans
-    )
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
 
 deriving instance MonadState s m => MonadState s (EnvT i o m)
 deriving instance MonadReader r m => MonadReader r (EnvT i o m)
@@ -173,17 +142,15 @@ fy \<\ fx = fx />/ fy
 -- | 
 
 newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
-  deriving
-    ( Functor
-    , Applicative
-    , MFunctor
-    , MMonad
-    , Monad
-    , MonadCatch
-    , MonadIO
-    , MonadThrow
-    , MonadTrans
-    )
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
 
 deriving instance MonadState s m => MonadState s (AgnT i o m)
 deriving instance MonadReader r m => MonadReader r (AgnT i o m)
@@ -289,41 +256,67 @@ fx /</ fy = fy \>\ fx
 
 
 newtype EpisodeT m r = EpisodeT { unEpisodeT :: P.Effect m r }
-  deriving
-    ( Functor
-    , Applicative
-    , MFunctor
-    , MMonad
-    , Monad
-    , MonadCatch
-    , MonadIO
-    , MonadThrow
-    , MonadTrans
-    )
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
+
 
 class MMonad u => MonadEpisode u a e where 
 
-
-
-  withAgent 
-    :: Monad m 
-    => MonadEnv   e i o
-    => MonadAgent a i o
-    => a i o m r -> (i -> e i o m r) -> u m r
-
   runEpisode :: Monad m => u m r -> m r
+
+  withAgent :: Ep a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
+
+  withEnvironment :: Ep a e i o u m => e i o m r -> (o -> a i o m r) -> u m r
+
 
 instance MonadEpisode EpisodeT AgnT EnvT where
   
-  withAgent a e = EpisodeT $ unAgnT a P.<<+ unEnvT . e
+  withAgent a f = EpisodeT $ unAgnT a P.<<+ unEnvT . f
 
   runEpisode = P.runEffect . unEpisodeT
 
+  withEnvironment e f = EpisodeT $ unEnvT e P.>>~ unAgnT . f
 
---run :: forall a e m p r . (MonadEpisode u a e, Monad m) => u m r -> m r
---run = runEpisode @p @a @e @m
 
 type Ep a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u a e)
+
+type Conf s t m = 
+  (Monad (s m), Monad (t m), Monad (s (t m)), MonadTrans s, MonadTrans t, MFunctor s)
+
+
+below :: (MFunctor t1, MFunctor t2, MFunctor t3, Monad m1, Monad m2, Monad (t3 m2), MonadTrans t4, MonadTrans t5) 
+   => (t1 (t4 m1) b1 -> (a -> t2 (t3 (t5 m2)) b2) -> t6)
+   -> t1 m1 b1 -> (a -> t2 (t3 m2) b2) -> t6
+below k x y = k (hoist lift x) $ hoist (hoist lift) . y
+
+
+above  :: (MFunctor t1, MFunctor t2, MFunctor t3, Monad m1, Monad m2, Monad (t3 m2), MonadTrans t4, MonadTrans t5) 
+  => (t1 (t3 (t4 m2)) b1 -> (a -> t2 (t5 m1) b2) -> t6)
+  -> t1 (t3 m2) b1 -> (a -> t2 m1 b2) -> t6
+above k x y = k (hoist (hoist lift) x) $ hoist lift . y
+
+{-
+foo a e = unAgnT . a P.>~> unEnvT . e
+
+\ a e -> EpisodeT $ unAgnT . a P.<~< unEnvT . e
+  :: Monad m =>
+     (o -> a i o m r)
+     -> (() -> e i o m r) -> () -> u m r
+infixl 7 >+>, >>~
+infixr 7 <+<, ~<<
+infixl 8 <~<
+infixr 8 >~>
+
+-}
+
+
 
 {-| Compose two episodes blocked in the middle of 'respond'ing, creating a new
     episode blocked in the middle of 'respond'ing
@@ -335,48 +328,117 @@ type Ep a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u
 -}
 
 infixr 6 +>>
-(+>>) :: Ep a e i o u m => (i -> e i o m r) -> a i o m r -> u m r 
+
+(+>>) :: Ep a e i o u m 
+      => (i -> e i o m r) -> a i o m r -> u m r 
 f +>> x = withAgent x f
 {-# INLINABLE [1] (+>>) #-}
 
+infixr 6 +/>
+
+(+/>) :: Conf s t m 
+      => Ep a e i o u m 
+      => (i -> e i o (t m) r) -> a i o (s m) r -> u (s (t m)) r
+f +/> a = above withAgent a f
+{-# INLINABLE [1] (+/>) #-}
+
+
+infixr 6 +\>
+
+(+\>) :: Conf t s m 
+      => Ep a e i o u m 
+      => (i -> e i o (t m) r) -> a i o (s m) r -> u (t (s m)) r
+f +\> a = below withAgent a f
+{-# INLINABLE [1] (+\>) #-}
+
+
+--f ->> a = above withAgent a f
+
+infixl 7 >>~
+
+(>>~) :: Ep a e i o u m => e i o m r -> (o -> a i o m r) -> u m r
+e >>~ f = withEnvironment e f
+
+
+infixl 7 >/-
+
+(>/~) :: Conf s t m
+      => Ep a e i o u m 
+      => e i o (s m) r -> (o -> a i o (t m) r) -> u (s (t m)) r
+e >/~ f = above withEnvironment e f
+
+-- TODO add triples for these as well
+--infixr 7 ~<<
+--infixl 8 <~<
+--infixr 8 >~>
+
+infixl 7 >\-
+
+(>\~) :: Conf t s m
+      => Ep a e i o u m 
+      => e i o (s m) r -> (o -> a i o (t m) r) -> u (t (s m)) r
+e >\~ f = below withEnvironment e f
+
+
 
 infixl 6 <<+
+
 (<<+) :: Ep a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
 x <<+ f = f +>> x
 
 
+
+infixl 6 <\+
+
+(<\+) :: Conf s t m 
+      => Ep a e i o u m 
+      => a i o (s m) r -> (i -> e i o (t m) r) -> u (s (t m)) r
+x <\+ f = f +/> x
+{-# INLINABLE (<\+) #-}
+
+
+
 infixl 7 >+>
+
 (>+>) :: Ep a e i o u m => (i -> e i o m r) -> (o -> a i o m r) -> o -> u m r
 f >+> g = \x -> f +>> g x
 {-# INLINABLE (>+>) #-}
 
 
+infixl 7 /+>
+
+(/+>) :: Conf s t m 
+      => Ep a e i o u m 
+      => (i -> e i o (t m) r) -> (o -> a i o (s m) r) -> o -> u (s (t m)) r
+f /+> g = \x -> f +/> g x
+
+
 infixr 7 <+<
+
 (<+<) :: Ep a e i o u m => (o -> a i o m r) -> (i -> e i o m r) -> o -> u m r
 g <+< f = f >+> g
+
+
+infixr 7 <+\
+
+(<+\) :: Conf s t m 
+      => Ep a e i o u m 
+      => (o -> a i o (s m) r) -> (i -> e i o (t m) r) -> o -> u (s (t m)) r
+g <+\ f = f /+> g
 
 
 reflectEnv :: Monad m => EnvT i o m r -> AgnT o i m r
 reflectEnv = AgnT . P.reflect . unEnvT
 
-
 reflectAgent :: Monad m => AgnT i o m r -> EnvT o i m r
 reflectAgent = EnvT . P.reflect . unAgnT
 
+runWithAgent 
+  :: forall a e i o u m r . ()
+  => Ep a e i o u m 
+  => a i o m r -> (i -> e i o m r) -> m r
+runWithAgent a = runEpisode @u @a @e . withAgent a
 
-
-
-
-withAgent'
-  :: Ep a e i o u m
-  => Monad (s m)
-  => Monad (t m)
-  => Monad (s (t m))
-  => MonadTrans s
-  => MonadTrans t
-  => MFunctor   s
-  => a i o (s m) r -> (i -> e i o (t m) r) -> u (s (t m)) r
-withAgent' ag en = withAgent (hoist (hoist lift) ag) (\i -> hoist lift $ en i) 
 
 
 -- TODO move to readme / put in lhs file
@@ -401,13 +463,11 @@ ag = request 1 >>= loop where
          liftIO $ modifyIORef r $ \k -> k + 2
          request j >>= loop
 
-ep1 :: EpisodeT (ReaderT (IORef Int) IO) ()
-ep1 = en +>> ag
-
 test1 :: IO ()
 test1 = do
     agr <- newIORef (1 :: Int)
-    let rt = runEpisode @_ @AgnT @EnvT $ ep1
+    let rt :: ReaderT (IORef Int) IO ()
+        rt = runEpisode @EpisodeT @AgnT @EnvT $ en +>> ag
     runReaderT rt agr
 
 {-
@@ -429,16 +489,15 @@ test1 = do
 
 
 
-ep2 :: EpisodeT (ReaderT (IORef Int) (ReaderT (IORef Int) IO)) ()
---ep2 = episode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
-ep2 = withAgent' ag en
+
 
 
 test2 :: IO ()
 test2 = do
     agr <- newIORef (1 :: Int)
     enr <- newIORef (1 :: Int)
-    let rt = runEpisode @_ @AgnT @EnvT $ ep2 
+    let rt :: ReaderT (IORef Int) (ReaderT (IORef Int) IO) ()
+        rt = runEpisode @EpisodeT @AgnT @EnvT $ en +/> ag 
     (`runReaderT` enr) . (`runReaderT` agr) $ rt
 
 {-

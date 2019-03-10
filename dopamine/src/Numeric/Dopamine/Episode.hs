@@ -16,6 +16,8 @@
 module Numeric.Dopamine.Episode where
 
 
+import Pipes.Core (Proxy(..), Server, Client, Effect)
+import qualified Pipes.Core as P
 
 
 

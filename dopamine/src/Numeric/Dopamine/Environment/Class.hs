@@ -114,11 +114,12 @@ instance PrimMonad m => PrimMonad (EnvT i o m) where
 
 class MMonad (e i o) => MonadEnv e i o where
 
+  bindEnv :: Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
+
   lowerEnv :: Monad m => e () Void m r -> m r
 
   respondEnv :: Monad m => o -> e i o m i
 
-  bindEnv :: Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
   --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
 
 respond :: (MonadEnv e i o, Monad m) => o -> e i o m i
@@ -126,11 +127,12 @@ respond = respondEnv
 
 instance MonadEnv EnvT i o where
 
+  bindEnv e f = EnvT $ unEnvT e P.//> unEnvT . f
+
   lowerEnv = runEnvT -- evalState (runEnvT e)
 
   respondEnv = EnvT . P.respond
 
-  bindEnv e f = EnvT $ unEnvT e P.//> unEnvT . f
 
 
 infixl 3 //>
@@ -185,6 +187,11 @@ newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
 
 deriving instance MonadState s m => MonadState s (AgnT i o m)
 deriving instance MonadReader r m => MonadReader r (AgnT i o m)
+
+
+--instance MonadAgent m i o => MonadAgent (IdentityT (m i o)) i o
+runAgnT :: Monad m => AgnT Void () m r -> m r
+runAgnT = P.runEffect . unAgnT
 
 
 instance PrimMonad m => PrimMonad (AgnT i o m) where
@@ -276,9 +283,6 @@ fx /</ fy = fy \>\ fx
 
 
 
---instance MonadAgent m i o => MonadAgent (IdentityT (m i o)) i o
-runAgnT :: Monad m => AgnT Void () m r -> m r
-runAgnT = P.runEffect . unAgnT
 
 -----------------------------------------------------------------------------------------
 -- | 
@@ -299,17 +303,19 @@ newtype EpisodeT m r = EpisodeT { unEpisodeT :: P.Effect m r }
 
 class MMonad u => MonadEpisode u a e where 
 
-  setEpisode
+
+
+  withAgent 
     :: Monad m 
     => MonadEnv   e i o
     => MonadAgent a i o
-    => (i -> e i o m r) -> a i o m r -> u m r
+    => a i o m r -> (i -> e i o m r) -> u m r
 
   runEpisode :: Monad m => u m r -> m r
 
 instance MonadEpisode EpisodeT AgnT EnvT where
   
-  setEpisode e a = EpisodeT $ unEnvT . e P.+>> unAgnT a
+  withAgent a e = EpisodeT $ unAgnT a P.<<+ unEnvT . e
 
   runEpisode = P.runEffect . unEpisodeT
 
@@ -317,26 +323,36 @@ instance MonadEpisode EpisodeT AgnT EnvT where
 --run :: forall a e m p r . (MonadEpisode u a e, Monad m) => u m r -> m r
 --run = runEpisode @p @a @e @m
 
-type Conf a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u a e)
+type Ep a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u a e)
+
+{-| Compose two episodes blocked in the middle of 'respond'ing, creating a new
+    episode blocked in the middle of 'respond'ing
+
+@
+(f '>+>' g) x = f '+>>' g x
+@
+
+-}
 
 infixr 6 +>>
-(+>>) :: Conf a e i o u m => (i -> e i o m r) -> a i o m r -> u m r 
-f +>> x = setEpisode f x
+(+>>) :: Ep a e i o u m => (i -> e i o m r) -> a i o m r -> u m r 
+f +>> x = withAgent x f
 {-# INLINABLE [1] (+>>) #-}
 
 
 infixl 6 <<+
-(<<+) :: Conf a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
+(<<+) :: Ep a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
 x <<+ f = f +>> x
 
+
 infixl 7 >+>
-(>+>) :: Conf a e i o u m => (i -> e i o m r) -> (o -> a i o m r) -> o -> u m r
+(>+>) :: Ep a e i o u m => (i -> e i o m r) -> (o -> a i o m r) -> o -> u m r
 f >+> g = \x -> f +>> g x
 {-# INLINABLE (>+>) #-}
 
 
 infixr 7 <+<
-(<+<) :: Conf a e i o u m => (o -> a i o m r) -> (i -> e i o m r) -> o -> u m r
+(<+<) :: Ep a e i o u m => (o -> a i o m r) -> (i -> e i o m r) -> o -> u m r
 g <+< f = f >+> g
 
 
@@ -351,16 +367,16 @@ reflectAgent = EnvT . P.reflect . unAgnT
 
 
 
-layer
-  :: Conf a e i o u m
+withAgent'
+  :: Ep a e i o u m
   => Monad (s m)
   => Monad (t m)
   => Monad (s (t m))
   => MonadTrans s
   => MonadTrans t
   => MFunctor   s
-  => (i -> e i o (t m) r) -> a i o (s m) r -> u (s (t m)) r
-layer en ag = setEpisode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
+  => a i o (s m) r -> (i -> e i o (t m) r) -> u (s (t m)) r
+withAgent' ag en = withAgent (hoist (hoist lift) ag) (\i -> hoist lift $ en i) 
 
 
 -- TODO move to readme / put in lhs file
@@ -415,7 +431,7 @@ test1 = do
 
 ep2 :: EpisodeT (ReaderT (IORef Int) (ReaderT (IORef Int) IO)) ()
 --ep2 = episode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
-ep2 = layer en ag
+ep2 = withAgent' ag en
 
 
 test2 :: IO ()

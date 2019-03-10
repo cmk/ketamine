@@ -132,52 +132,42 @@ instance MonadEnv EnvT i o where
 
   bindEnv e f = EnvT $ unEnvT e P.//> unEnvT . f
 
-{-
-infixl 3 //>
-infixr 3 <\\      -- GHC will raise a parse error if either of these lines ends
-infixr 4 />/, >\\ -- with '\', which is why this comment is here
-infixl 4 \<\, //<
-infixl 5 \>\      -- Same thing here
-infixr 5 /</
-infixl 6 <<+
-infixr 6 +>>
-infixl 7 >+>, >>~
-infixr 7 <+<, ~<<
-infixl 8 <~<
-infixr 8 >~>
-
-
--- | Equivalent to ('\>\') with the arguments flipped
-(/</)
-    :: Monad m
-    => (c' -> Proxy b' b x' x m c)
-    -- ^
-    -> (b' -> Proxy a' a x' x m b)
-    -- ^
-    -> (c' -> Proxy a' a x' x m c)
-    -- ^
-p1 /</ p2 = p2 \>\ p1
-{-# INLINABLE (/</) #-}
-
--}
 
 infixl 3 //>
+
+-- | 'MonadEnv' analog of '//<'
 (//>) :: MonadEnv e i o => Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
 e //> f = bindEnv e f
 {-# INLINABLE (//>) #-}
 
--- p1 \<\ p2 = p2 />/ p1
-infixr 4 />/
+
+infixl 3 <\\
+
+-- | 'MonadEnv' analog of '>\\'
+(<\\) :: MonadEnv e i o => Monad m => (y -> e i o m x) -> e x y m r -> e i o m r
+f <\\ e = e //> f 
+{-# INLINABLE (<\\) #-}
+
+
+infixr 4 />/ --
+
+-- | 'MonadEnv' analog of '/</'
 (/>/) 
-  :: MonadEnv e i o
-  => Monad m
-  => (x -> e z y m r)
-  -> (y -> e i o m z) 
-  ->  x -> e i o m r
-fa />/ fb = \a -> fa a //> fb
+  :: MonadEnv e i o => Monad m => (x -> e z y m r) -> (y -> e i o m z) -> x -> e i o m r
+fx />/ fy = \x -> fx x //> fy
 {-# INLINABLE (/>/) #-}
 
--------------------------------------------------------------------------------
+
+infixl 4 \<\
+
+-- | 'MonadEnv' analog of '\>\'
+(\<\) 
+  :: MonadEnv e i o => Monad m => (y -> e i o m z) -> (x -> e z y m r) -> x -> e i o m r
+fy \<\ fx = fx />/ fy 
+{-# INLINABLE (\<\) #-}
+
+
+-----------------------------------------------------------------------------------------
 -- | 
 
 newtype AgnT i o m r = AgnT { unAgnT :: P.Client i o m r }
@@ -225,104 +215,68 @@ instance MonadAgent AgnT i o where
 request :: (MonadAgent a i o, Monad m) => i -> a i o m o
 request = requestAgent
 
+
+
+{- $request
+    The 'request' category closely corresponds to the iteratee design pattern.
+
+    The 'request' category obeys the category laws, where 'request' is the
+    identity and ('\>\') is composition:
+
+@
+-- Left identity
+'request' '\>\' f = f
+
+\-\- Right identity
+f '\>\' 'request' = f
+
+\-\- Associativity
+(f '\>\' g) '\>\' h = f '\>\' (g '\>\' h)
+@
+
+-}
+
+
+
+
 infixl 4 //<
-(//<) :: MonadAgent a i o => Monad m => a x y m r -> (x -> a i o m y) -> a i o m r
+
+(//<) 
+  :: MonadAgent a i o => Monad m => a x y m r -> (x -> a i o m y) -> a i o m r
 a //< f = bindAgent a f
 {-# INLINABLE (//<) #-}
 
-infixr 4 >\\ 
-(>\\) :: MonadAgent a i o => Monad m => (x -> a i o m y) -> a x y m r -> a i o m r
+
+infixr 4 >\\ --
+ 
+-- | 'MonadAgent' equivalent of '<\\'
+(>\\) 
+  :: MonadAgent a i o => Monad m => (x -> a i o m y) -> a x y m r -> a i o m r
 f >\\ a = a //< f
 {-# INLINABLE (>\\) #-}
 
---fa />/ fb = \a -> fa a //< fb
 
-{-
--- p1 \<\ p2 = p2 />/ p1
-infixr 4 />/
-(/>/) 
-  :: MonadEnv e i o
-  => Monad m
-  => (x -> e z y m r)
-  -> (y -> e i o m z) 
-  ->  x -> e i o m r
-fa />/ fb = \a -> fa a //> fb
-{-# INLINABLE (/>/) #-}
+infixl 5 \>\ --
 
--- | Equivalent to ('/>/') with the arguments flipped
-(\<\)
-    :: Monad m
-    => (b -> Proxy x' x c' c m b')
-    -- ^
-    -> (a -> Proxy x' x b' b m a')
-    -- ^
-    -> (a -> Proxy x' x c' c m a')
-    -- ^
-p1 \<\ p2 = p2 />/ p1
-{-# INLINABLE (\<\) #-}
-
-
--- p1 /</ p2 = p2 \>\ p1
-h :: Monad m =>
-     (a1 -> AgnT a2 b m r) -> (a2 -> AgnT i o m b) -> a1 -> AgnT i o m r
-h a1 a2 = AgnT . (unAgnT . a1 P./</ unAgnT . a2)
-
-
-infixl 3 //>
-infixr 3 <\\      -- GHC will raise a parse error if either of these lines ends
-infixr 4 />/, >\\ -- with '\', which is why this comment is here
-infixl 4 \<\, //<
-infixl 5 \>\      -- Same thing here
-infixr 5 /</
-infixl 6 <<+
-infixr 6 +>>
-infixl 7 >+>, >>~
-infixr 7 <+<, ~<<
-infixl 8 <~<
-infixr 8 >~>
-
-(\>\)
-    :: Monad m
-    => (b' -> Proxy a' a y' y m b)
-    -- ^
-    -> (c' -> Proxy b' b y' y m c)
-    -- ^
-    -> (c' -> Proxy a' a y' y m c)
-    -- ^
-(fb' \>\ fc') c' = fb' >\\ fc' c'
+-- | 'MonadAgent' analog of '\<\'
+(\>\) 
+  :: MonadAgent a i o => Monad m => (y -> a i o m z) -> (x -> a y z m r) -> x -> a i o m r
+fy \>\ fx = \x -> fy >\\ fx x
 {-# INLINABLE (\>\) #-}
 
-{-| @(f >\\\\ p)@ replaces each 'request' in @p@ with @f@.
-
-    Point-ful version of ('\>\')
--}
-(>\\)
-    :: Monad m
-    => (b' -> Proxy a' a y' y m b)
-    -- ^
-    ->        Proxy b' b y' y m c
-    -- ^
-    ->        Proxy a' a y' y m c
-    -- ^
-fb' >\\ p0 = go p0
 
 infixr 5 /</
-(/</)
-  :: MonadAgent a i o
-  => Monad m
-  => ( x -> a y z m r ) 
-  -> ( y -> a i o m z ) 
-  ->   x -> a i o m r
-a1 /</ a2 = composeAgent a1 a2 
--}
 
-
+-- | 'MonadAgent' analog of '/>/'
+(/</) 
+  :: MonadAgent a i o => Monad m => (x -> a y z m r) -> (y -> a i o m z) -> x -> a i o m r
+fx /</ fy = fy \>\ fx
+{-# INLINABLE (/</) #-}
 
 
 
 
 --instance MonadAgent m i o => MonadAgent (IdentityT (m i o)) i o
-
 runAgnT :: Monad m => AgnT Void () m r -> m r
 runAgnT = P.runEffect . unAgnT
 
@@ -353,52 +307,61 @@ class MMonad u => MonadEpisode u a e where
 
   runEpisode :: Monad m => u m r -> m r
 
+instance MonadEpisode EpisodeT AgnT EnvT where
+  
+  setEpisode e a = EpisodeT $ unEnvT . e P.+>> unAgnT a
+
+  runEpisode = P.runEffect . unEpisodeT
+
 
 --run :: forall a e m p r . (MonadEpisode u a e, Monad m) => u m r -> m r
 --run = runEpisode @p @a @e @m
 
 type Conf a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u a e)
 
+infixr 6 +>>
+(+>>) :: Conf a e i o u m => (i -> e i o m r) -> a i o m r -> u m r 
+f +>> x = setEpisode f x
+{-# INLINABLE [1] (+>>) #-}
+
+
+infixl 6 <<+
+(<<+) :: Conf a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
+x <<+ f = f +>> x
 
 infixl 7 >+>
 (>+>) :: Conf a e i o u m => (i -> e i o m r) -> (o -> a i o m r) -> o -> u m r
 f >+> g = \x -> f +>> g x
+{-# INLINABLE (>+>) #-}
+
 
 infixr 7 <+<
 (<+<) :: Conf a e i o u m => (o -> a i o m r) -> (i -> e i o m r) -> o -> u m r
-g <+< f = \x -> g x <<+ f
+g <+< f = f >+> g
 
-infixr 6 +>>
-(+>>) :: Conf a e i o u m => (i -> e i o m r) -> a i o m r -> u m r 
-f +>> x = setEpisode f x
 
-infixl 6 <<+
-(<<+) :: Conf a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
-x <<+ f = setEpisode f x
+reflectEnv :: Monad m => EnvT i o m r -> AgnT o i m r
+reflectEnv = AgnT . P.reflect . unEnvT
 
-{-
-(>+>) infixl 7 Source#
 
-:: Monad m	 
-=> (i -> e i o m r)	 
--> (_c' -> Proxy b' b c' c m r)	 
--> _c' -> Proxy a' a c' c m r
--}
-
-f 
-  :: Monad m 
-  => (i -> EnvT i o m r)
-  -> (o -> AgnT i o m r) 
-  ->  o -> EpisodeT m r
-f e a = EpisodeT . (unEnvT . e P.>+> unAgnT . a)
+reflectAgent :: Monad m => AgnT i o m r -> EnvT o i m r
+reflectAgent = EnvT . P.reflect . unAgnT
 
 
 
-instance MonadEpisode EpisodeT AgnT EnvT where
-  
-  setEpisode e a = EpisodeT $ unEnvT . e P.+>> unAgnT a
 
-  runEpisode = P.runEffect . unEpisodeT
+
+layer
+  :: Conf a e i o u m
+  => Monad (s m)
+  => Monad (t m)
+  => Monad (s (t m))
+  => MonadTrans s
+  => MonadTrans t
+  => MFunctor   s
+  => (i -> e i o (t m) r) -> a i o (s m) r -> u (s (t m)) r
+layer en ag = setEpisode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
+
 
 -- TODO move to readme / put in lhs file
 -- TODO give example using ether
@@ -452,18 +415,7 @@ test1 = do
 
 ep2 :: EpisodeT (ReaderT (IORef Int) (ReaderT (IORef Int) IO)) ()
 --ep2 = episode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
-ep2 = sep en ag
-
-sep
-  :: Conf a e i o u m
-  => Monad (s m)
-  => Monad (t m)
-  => Monad (s (t m))
-  => MonadTrans s
-  => MonadTrans t
-  => MFunctor   s
-  => (i -> e i o (t m) r) -> a i o (s m) r -> u (s (t m)) r
-sep en ag = setEpisode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
+ep2 = layer en ag
 
 
 test2 :: IO ()

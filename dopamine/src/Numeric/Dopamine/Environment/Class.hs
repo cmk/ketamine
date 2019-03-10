@@ -27,24 +27,25 @@ import Control.Monad.IO.Class
 import Control.Monad.IO.Unlift
 import Control.Monad.Morph -- (MFunctor(..), MMonad(..), MonadTrans(..)) 
 import Control.Monad.Primitive
-import Control.Monad.Reader.Class (MonadReader(..))
-import Control.Monad.State.Class (MonadState(..))
+import Control.Monad.Reader.Class (MonadReader)
+import Control.Monad.State.Class (MonadState)
 import Control.Monad.Trans.Cont (ContT(..), runContT)
 import Control.Monad.Trans.Identity (IdentityT(..), mapIdentityT)
 import Control.Monad.Trans.Maybe
 --import Control.Monad.Trans.Resource (MonadResource(..))
-import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
 import Data.Default
 import Data.Functor.Identity
 import Data.Maybe (maybe)
 import Data.Void
+import Data.IORef
 
 import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
 import qualified Control.Monad.Catch as Catch
-import qualified Control.Monad.Reader.Class as Reader
-import qualified Control.Monad.State.Class as State 
+import qualified Control.Monad.Reader.Class as R
+import qualified Control.Monad.State.Class as S 
 import qualified Control.Monad.Trans.Class as Trans
 
 import Pipes.Core (Proxy(..), Server, Client, Effect)
@@ -84,53 +85,25 @@ fromSocketN sock = loop where
 
 --(>\\) = P.(>\\)
 
-newtype EnvT i o m r = EnvT { unEnvT :: ReaderT i (P.Server i o m) r }
+newtype EnvT i o m r = EnvT { unEnvT :: P.Server i o m r }
   deriving
     ( Functor
     , Applicative
-    --, MFunctor
-    --, MMonad
+    , MFunctor
+    , MMonad
     , Monad
     , MonadCatch
     , MonadIO
     , MonadThrow
-    --, MonadTrans
+    , MonadTrans
     )
 
 deriving instance MonadState s m => MonadState s (EnvT i o m)
+deriving instance MonadReader r m => MonadReader r (EnvT i o m)
 
---deriving instance MonadReader r m => MonadReader r (EnvT i o m)
-instance Monad m => MonadReader i (EnvT i o m) where
-  ask = EnvT Reader.ask
-  local f m = EnvT $ Reader.local f (unEnvT m)
+runEnvT :: Monad m => EnvT () Void m r -> m r
+runEnvT = P.runEffect . unEnvT
 
-{-
-instance MonadReader r m => MonadReader r (EnvT i o m) where
-  ask = Trans.lift ask
-  local f m = mapEnvT (Reader.local f) m
--}
-
-mapEnvT :: (P.Server i o m a -> P.Server i o n b) -> EnvT i o m a -> EnvT i o n b
-mapEnvT f e = undefined
-  EnvT $ ReaderT $ \inp ->
-    f (runReaderT (unEnvT e) inp)
-
-instance MonadTrans (EnvT i o) where
-  lift = liftEnvT . Trans.lift
-
-instance MFunctor (EnvT i o) where
-  hoist f =
-    mapEnvT (hoist f)
-
--- TODO implement
-instance MMonad (EnvT i o) where
-  embed f = undefined
-
---deriving instance MonadState s m => MonadState s (EnvT i o m)
---deriving instance MonadReader r m => MonadReader r (EnvT i o m)
-
-liftEnvT :: P.Server i o m r -> EnvT i o m r 
-liftEnvT s = EnvT $ ReaderT $ \_ -> s 
 
 instance PrimMonad m => PrimMonad (EnvT i o m) where
 
@@ -141,22 +114,68 @@ instance PrimMonad m => PrimMonad (EnvT i o m) where
 
 class MMonad (e i o) => MonadEnv e i o where
 
-  lowerE :: Monad m => e () Void m r -> m r
+  lowerEnv :: Monad m => e () Void m r -> m r
 
-  respondE :: Monad m => o -> e i o m i
+  respondEnv :: Monad m => o -> e i o m i
 
+  bindEnv :: Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
   --viewEnv :: (s -> m (Maybe o)) -> e i o (m s) r -- e i o m (Maybe o)
 
+respond :: (MonadEnv e i o, Monad m) => o -> e i o m i
+respond = respondEnv
 
 instance MonadEnv EnvT i o where
 
-  lowerE = runEnvT -- evalState (runEnvT e)
+  lowerEnv = runEnvT -- evalState (runEnvT e)
 
-  respondE = liftEnvT . P.respond
+  respondEnv = EnvT . P.respond
+
+  bindEnv e f = EnvT $ unEnvT e P.//> unEnvT . f
+
+{-
+infixl 3 //>
+infixr 3 <\\      -- GHC will raise a parse error if either of these lines ends
+infixr 4 />/, >\\ -- with '\', which is why this comment is here
+infixl 4 \<\, //<
+infixl 5 \>\      -- Same thing here
+infixr 5 /</
+infixl 6 <<+
+infixr 6 +>>
+infixl 7 >+>, >>~
+infixr 7 <+<, ~<<
+infixl 8 <~<
+infixr 8 >~>
 
 
-runEnvT :: Monad m => EnvT () Void m r -> m r
-runEnvT = P.runEffect . (`runReaderT` ()) . unEnvT
+-- | Equivalent to ('\>\') with the arguments flipped
+(/</)
+    :: Monad m
+    => (c' -> Proxy b' b x' x m c)
+    -- ^
+    -> (b' -> Proxy a' a x' x m b)
+    -- ^
+    -> (c' -> Proxy a' a x' x m c)
+    -- ^
+p1 /</ p2 = p2 \>\ p1
+{-# INLINABLE (/</) #-}
+
+-}
+
+infixl 3 //>
+(//>) :: MonadEnv e i o => Monad m => e x y m r -> (y -> e i o m x) -> e i o m r
+e //> f = bindEnv e f
+{-# INLINABLE (//>) #-}
+
+-- p1 \<\ p2 = p2 />/ p1
+infixr 4 />/
+(/>/) 
+  :: MonadEnv e i o
+  => Monad m
+  => (x -> e z y m r)
+  -> (y -> e i o m z) 
+  ->  x -> e i o m r
+fa />/ fb = \a -> fa a //> fb
+{-# INLINABLE (/>/) #-}
 
 -------------------------------------------------------------------------------
 -- | 
@@ -187,17 +206,122 @@ instance PrimMonad m => PrimMonad (AgnT i o m) where
 
 class MMonad (a i o) => MonadAgent a i o where
 
-  lowerA :: Monad m => a Void () m r -> m r
+  bindAgent :: Monad m => a x y m r -> (x -> a i o m y) -> a i o m r
 
-  requestA :: Monad m => i -> a i o m o
+  lowerAgent :: Monad m => a Void () m r -> m r
+
+  requestAgent :: Monad m => i -> a i o m o
 
 
 instance MonadAgent AgnT i o where
 
-  lowerA = runAgnT
+  bindAgent a f = AgnT $ unAgnT a P.//< unAgnT . f
 
-  requestA = AgnT . P.request
+  lowerAgent = runAgnT
 
+  requestAgent = AgnT . P.request
+
+
+request :: (MonadAgent a i o, Monad m) => i -> a i o m o
+request = requestAgent
+
+infixl 4 //<
+(//<) :: MonadAgent a i o => Monad m => a x y m r -> (x -> a i o m y) -> a i o m r
+a //< f = bindAgent a f
+{-# INLINABLE (//<) #-}
+
+infixr 4 >\\ 
+(>\\) :: MonadAgent a i o => Monad m => (x -> a i o m y) -> a x y m r -> a i o m r
+f >\\ a = a //< f
+{-# INLINABLE (>\\) #-}
+
+--fa />/ fb = \a -> fa a //< fb
+
+{-
+-- p1 \<\ p2 = p2 />/ p1
+infixr 4 />/
+(/>/) 
+  :: MonadEnv e i o
+  => Monad m
+  => (x -> e z y m r)
+  -> (y -> e i o m z) 
+  ->  x -> e i o m r
+fa />/ fb = \a -> fa a //> fb
+{-# INLINABLE (/>/) #-}
+
+-- | Equivalent to ('/>/') with the arguments flipped
+(\<\)
+    :: Monad m
+    => (b -> Proxy x' x c' c m b')
+    -- ^
+    -> (a -> Proxy x' x b' b m a')
+    -- ^
+    -> (a -> Proxy x' x c' c m a')
+    -- ^
+p1 \<\ p2 = p2 />/ p1
+{-# INLINABLE (\<\) #-}
+
+
+-- p1 /</ p2 = p2 \>\ p1
+h :: Monad m =>
+     (a1 -> AgnT a2 b m r) -> (a2 -> AgnT i o m b) -> a1 -> AgnT i o m r
+h a1 a2 = AgnT . (unAgnT . a1 P./</ unAgnT . a2)
+
+
+infixl 3 //>
+infixr 3 <\\      -- GHC will raise a parse error if either of these lines ends
+infixr 4 />/, >\\ -- with '\', which is why this comment is here
+infixl 4 \<\, //<
+infixl 5 \>\      -- Same thing here
+infixr 5 /</
+infixl 6 <<+
+infixr 6 +>>
+infixl 7 >+>, >>~
+infixr 7 <+<, ~<<
+infixl 8 <~<
+infixr 8 >~>
+
+(\>\)
+    :: Monad m
+    => (b' -> Proxy a' a y' y m b)
+    -- ^
+    -> (c' -> Proxy b' b y' y m c)
+    -- ^
+    -> (c' -> Proxy a' a y' y m c)
+    -- ^
+(fb' \>\ fc') c' = fb' >\\ fc' c'
+{-# INLINABLE (\>\) #-}
+
+{-| @(f >\\\\ p)@ replaces each 'request' in @p@ with @f@.
+
+    Point-ful version of ('\>\')
+-}
+(>\\)
+    :: Monad m
+    => (b' -> Proxy a' a y' y m b)
+    -- ^
+    ->        Proxy b' b y' y m c
+    -- ^
+    ->        Proxy a' a y' y m c
+    -- ^
+fb' >\\ p0 = go p0
+
+infixr 5 /</
+(/</)
+  :: MonadAgent a i o
+  => Monad m
+  => ( x -> a y z m r ) 
+  -> ( y -> a i o m z ) 
+  ->   x -> a i o m r
+a1 /</ a2 = composeAgent a1 a2 
+-}
+
+
+
+
+
+
+--instance MonadAgent m i o => MonadAgent (IdentityT (m i o)) i o
 
 runAgnT :: Monad m => AgnT Void () m r -> m r
 runAgnT = P.runEffect . unAgnT
@@ -219,131 +343,147 @@ newtype EpisodeT m r = EpisodeT { unEpisodeT :: P.Effect m r }
     , MonadTrans
     )
 
-class MMonad p => MonadEpisode p a e where 
+class MMonad u => MonadEpisode u a e where 
 
-  episode
+  setEpisode
     :: Monad m 
     => MonadEnv   e i o
     => MonadAgent a i o
-    => e i o m r -> a i o m r -> p m r
+    => (i -> e i o m r) -> a i o m r -> u m r
 
-  run :: Monad m => p m r -> m r
+  runEpisode :: Monad m => u m r -> m r
+
+
+--run :: forall a e m p r . (MonadEpisode u a e, Monad m) => u m r -> m r
+--run = runEpisode @p @a @e @m
+
+type Conf a e i o u m = (Monad m, MonadEnv e i o, MonadAgent a i o, MonadEpisode u a e)
+
+
+infixl 7 >+>
+(>+>) :: Conf a e i o u m => (i -> e i o m r) -> (o -> a i o m r) -> o -> u m r
+f >+> g = \x -> f +>> g x
+
+infixr 7 <+<
+(<+<) :: Conf a e i o u m => (o -> a i o m r) -> (i -> e i o m r) -> o -> u m r
+g <+< f = \x -> g x <<+ f
+
+infixr 6 +>>
+(+>>) :: Conf a e i o u m => (i -> e i o m r) -> a i o m r -> u m r 
+f +>> x = setEpisode f x
+
+infixl 6 <<+
+(<<+) :: Conf a e i o u m => a i o m r -> (i -> e i o m r) -> u m r
+x <<+ f = setEpisode f x
+
+{-
+(>+>) infixl 7 Source#
+
+:: Monad m	 
+=> (i -> e i o m r)	 
+-> (_c' -> Proxy b' b c' c m r)	 
+-> _c' -> Proxy a' a c' c m r
+-}
+
+f 
+  :: Monad m 
+  => (i -> EnvT i o m r)
+  -> (o -> AgnT i o m r) 
+  ->  o -> EpisodeT m r
+f e a = EpisodeT . (unEnvT . e P.>+> unAgnT . a)
+
+
 
 instance MonadEpisode EpisodeT AgnT EnvT where
   
-  episode e a = EpisodeT $ (runReaderT . unEnvT) e P.+>> unAgnT a
+  setEpisode e a = EpisodeT $ unEnvT . e P.+>> unAgnT a
 
-  run = P.runEffect . unEpisodeT
+  runEpisode = P.runEffect . unEpisodeT
 
+-- TODO move to readme / put in lhs file
+-- TODO give example using ether
+en :: Int -> EnvT Int Int (ReaderT (IORef Int) IO) ()
+en = loop where
+    loop = \i -> do
+         r <- lift ask
+         j <- liftIO $ readIORef r
+         liftIO $ print $ "en state: " ++ show j
+         liftIO $ modifyIORef r $ \k -> k - 1
+         if i > 4
+             then return ()
+             else respond i >>= loop
 
+ag :: AgnT Int Int (ReaderT (IORef Int) IO) ()
+ag = request 1 >>= loop where
+    loop _ = do
+         r <- lift ask
+         j <- liftIO $ readIORef r
+         liftIO $ print $ "ag state: " ++ show j
+         liftIO $ modifyIORef r $ \k -> k + 2
+         request j >>= loop
 
-s :: EnvT Int Int (StateT Int IO) Int
-s = loop where
-    loop = do
-       i <- Reader.ask
-       liftIO $ print i 
-       if i > 9
-           then return i
-           else State.modify (+ i) >> respondE (i + 1) >> loop --TODO looks wrong
+ep1 :: EpisodeT (ReaderT (IORef Int) IO) ()
+ep1 = en +>> ag
 
-c :: AgnT Int Int (State Int) Int
-c = (State.get >>= requestA) >>= loop
-  where
-    loop i = (State.get >>= \j -> State.put (i+j) >> requestA (i + j + 1) ) >>= loop
-
-ep1 :: EpisodeT (StateT Int IO) Int
-ep1 = episode s $ hoist (hoist generalize) c
-
-go1 :: StateT Int IO Int
-go1 = run @_ @AgnT @EnvT ep1
-
-ep2 :: EpisodeT (StateT Int (StateT Int IO)) Int
-ep2 = episode (hoist lift s) (hoist lift $ hoist (hoist generalize) c)
-
-go2 :: StateT Int (StateT Int IO) Int
-go2 = run @_ @AgnT @EnvT ep2
-
-
-{-
-
-
-
-
-
--}
+test1 :: IO ()
+test1 = do
+    agr <- newIORef (1 :: Int)
+    let rt = runEpisode @_ @AgnT @EnvT $ ep1
+    runReaderT rt agr
 
 {-
-request :: Monad m => a' -> Proxy a' a y' y m a
-
-runEnvT :: EnvT o m a -> (a -> m o) -> m o
-runEnvT = runContT . unEnvT
-
-respond :: i -> e i o m o
-
-runEffect :: Monad m => Effect m r -> m r
-
-(+>>)
-  :: Monad m =>
-     (b' -> Proxy a' a b' b m r)
-     -> Proxy b' b c' c m r -> Proxy a' a c' c m r
-
-class (Monad m, MonadTrans e) => MonadEnv s o m e | m -> s, e -> o where
-
-  lowerEnv :: e m (Maybe o) -> m (Maybe o)
-
-  viewEnv :: (s -> m (Maybe o)) -> e m (Maybe o)
-
-  withEnv :: ((b -> m (Maybe o)) -> a -> m (Maybe o)) -> e m a -> e m b
-
-
-instance MonadState s m => MonadEnv s o m (EnvT (Maybe o)) where
-
-  lowerEnv e = runEnvT e return
-
-  viewEnv v = Trans.lift $ State.get >>= v
-
-  withEnv f e = EnvT . ContT $ runEnvT e . f
+> test1
+"en state: 1"
+"ag state: 0"
+"en state: 2"
+"ag state: 1"
+"en state: 3"
+"ag state: 2"
+"en state: 4"
+"ag state: 3"
+"en state: 5"
+"ag state: 4"
+"en state: 6"
+"ag state: 5"
+"en state: 7"
 -}
+
+
+
+ep2 :: EpisodeT (ReaderT (IORef Int) (ReaderT (IORef Int) IO)) ()
+--ep2 = episode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
+ep2 = sep en ag
+
+sep
+  :: Conf a e i o u m
+  => Monad (s m)
+  => Monad (t m)
+  => Monad (s (t m))
+  => MonadTrans s
+  => MonadTrans t
+  => MFunctor   s
+  => (i -> e i o (t m) r) -> a i o (s m) r -> u (s (t m)) r
+sep en ag = setEpisode (\i -> hoist lift $ en i) (hoist (hoist lift) ag)
+
+
+test2 :: IO ()
+test2 = do
+    agr <- newIORef (1 :: Int)
+    enr <- newIORef (1 :: Int)
+    let rt = runEpisode @_ @AgnT @EnvT $ ep2 
+    (`runReaderT` enr) . (`runReaderT` agr) $ rt
 
 {-
-episode :: Monad m => o -> (a -> m (Maybe o)) -> (o -> m a) -> m ()
-
-
--- from dev/finalize-base-api
-type Env s o = EnvT s Identity o
-
-newtype EnvT s m o = EnvT { runEnvT :: StateT s (MaybeT m) o } deriving Functor
-
-
-class Monad m => MonadEnv s m | m -> s where
-
-    liftEnv :: Env s o -> m o
-
-    -- stepEnv :: (o -> m a) -> m o -> m o
-    -- runSelectT :: SelectT a m o -> (o -> m a) -> m o
-
-    --stepEnv :: a -> m (Maybe (Outcome o r))
-    
-    overEnv :: (s -> s) -> m o -> m o
-
-    -- run env from a default initial state and produce outcome state
-    initEnv :: Default s => m o -> m (o, s)
-
-instance Monad m => MonadEnv s (EnvT s m) where
-
-    liftEnv = hoist generalize
-
-    --stepEnv amo = EnvT $ \_ -> runEnvT mo a
-
-    overEnv f = mapEnvT ((fmap . fmap) f)
-
-    initEnv env = EnvT $ do
-      mx <- Trans.lift . Trans.lift . runMaybeT . (`runStateT` def) $ runEnvT env
-      case mx of
-        Nothing -> mzero
-        Just out -> pure out
-
+> test2
+"en state: 1"
+"ag state: 1"
+"en state: 0"
+"ag state: 3"
+"en state: -1"
+"ag state: 5"
+"en state: -2"
 -}
+
 
 
 

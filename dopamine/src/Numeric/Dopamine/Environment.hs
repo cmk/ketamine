@@ -61,21 +61,18 @@ runEnvironment = P.runEffect . unEnT
 outcome :: Monad m => o -> EnT a o m a
 outcome = EnT . P.respond
 
-bindEnvironment :: Monad m => EnT x y m r -> (y -> EnT a o m x) -> EnT a o m r
-bindEnvironment e f = EnT $ unEnT e P.//> unEnT . f
-
 
 infixl 3 //>
 
--- | 'MonadEnv' analog of '//<'
+-- | 'EnT' analog of '//<'
 (//>) :: Monad m => EnT x y m r -> (y -> EnT a o m x) -> EnT a o m r
-e //> f = bindEnvironment e f
+e //> f = EnT $ unEnT e P.//> unEnT . f 
 {-# INLINABLE (//>) #-}
 
 
 infixr 3 <\\
 
--- | 'MonadEnv' analog of '>\\'
+-- | 'EnT' analog of '>\\'
 (<\\) :: Monad m => (y -> EnT a o m x) -> EnT x y m r -> EnT a o m r
 f <\\ e = e //> f 
 {-# INLINABLE (<\\) #-}
@@ -83,7 +80,7 @@ f <\\ e = e //> f
 
 infixr 4 />/ --
 
--- | 'MonadEnv' analog of '/</'
+-- | 'EnT' analog of '/</'
 (/>/) 
   :: Monad m => (x -> EnT z y m r) -> (y -> EnT a o m z) -> x -> EnT a o m r
 fx />/ fy = \x -> fx x //> fy
@@ -92,10 +89,9 @@ fx />/ fy = \x -> fx x //> fy
 
 infixl 4 \<\
 
--- | 'MonadEnv' analog of '\>\'
+-- | 'EnT' analog of '\>\'
 (\<\) 
   :: Monad m => (y -> EnT a o m z) -> (x -> EnT z y m r) -> x -> EnT a o m r
 fy \<\ fx = fx />/ fy 
 {-# INLINABLE (\<\) #-}
-
 

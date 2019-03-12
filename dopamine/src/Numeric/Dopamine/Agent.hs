@@ -65,10 +65,6 @@ runAgent = P.runEffect . unAgT
 action :: Monad m => a -> AgT a o m o
 action = AgT . P.request
 
-bindAgent :: Monad m => AgT x y m r -> (x -> AgT a o m y) -> AgT a o m r
-bindAgent a f = AgT $ unAgT a P.//< unAgT . f
-
-
 
 {- $request
     The 'request' category closely corresponds to the iteratee design pattern.
@@ -92,15 +88,16 @@ f '\>\' 'request' = f
 
 infixl 4 //<
 
+-- | 'AgT' analog of '\\>'
 (//<) 
   :: Monad m => AgT x y m r -> (x -> AgT a o m y) -> AgT a o m r
-a //< f = bindAgent a f
+a //< f = AgT $ unAgT a P.//< unAgT . f 
 {-# INLINABLE (//<) #-}
 
 
 infixr 4 >\\ --
  
--- | 'MonadAgent' equivalent of '<\\'
+-- | 'AgT' analog of '<\\'
 (>\\) 
   :: Monad m => (x -> AgT a o m y) -> AgT x y m r -> AgT a o m r
 f >\\ a = a //< f
@@ -109,7 +106,7 @@ f >\\ a = a //< f
 
 infixl 5 \>\ --
 
--- | 'MonadAgent' analog of '\<\'
+-- | 'AgT' analog of '\<\'
 (\>\) 
   :: Monad m => (y -> AgT a o m z) -> (x -> AgT y z m r) -> x -> AgT a o m r
 fy \>\ fx = \x -> fy >\\ fx x
@@ -118,7 +115,7 @@ fy \>\ fx = \x -> fy >\\ fx x
 
 infixr 5 /</
 
--- | 'MonadAgent' analog of '/>/'
+-- | 'AgT' analog of '/>/'
 (/</) 
   :: Monad m => (x -> AgT y z m r) -> (y -> AgT a o m z) -> x -> AgT a o m r
 fx /</ fy = fy \>\ fx

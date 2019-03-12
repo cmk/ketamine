@@ -41,18 +41,6 @@ newtype EpT m r = EpT { unEpT :: P.Proxy P.X () () P.X m r }
 runEpisode :: Monad m => EpT m r -> m r
 runEpisode = P.runEffect . unEpT
 
-withAgent :: Monad m => AgT a o m r -> (a -> EnT a o m r) -> EpT m r 
-withAgent a f = EpT $ unAgT a P.<<+ unEnT . f
-
-runWithAgent :: Monad m => AgT a o m r -> (a -> EnT a o m r) -> m r
-runWithAgent a = runEpisode . withAgent a
-
-withEnvironment :: Monad m => EnT a o m r -> (o -> AgT a o m r) -> EpT m r
-withEnvironment e f = EpT $ unEnT e P.>>~ unAgT . f
-
-runWithEnvironment :: Monad m => EnT i o m r -> (o -> AgT i o m r) -> m r
-runWithEnvironment a = runEpisode . withEnvironment a
-
 reflectAgent :: Monad m => AgT a o m r -> EnT o a m r
 reflectAgent = EnT . P.reflect . unAgT
 
@@ -83,32 +71,14 @@ infixr 6 +>>
 
 (+>>) :: Monad m 
       => (a -> EnT a o m r) -> AgT a o m r -> EpT m r 
-f +>> a = withAgent a f
+f +>> a = EpT $ unEnT . f P.+>> unAgT a 
 {-# INLINABLE [1] (+>>) #-}
-
-
-infixr 6 +/>
-
-(+/>) :: M s t m 
-      => Monad m 
-      => (a -> EnT a o (t m) r) -> AgT a o (s m) r -> EpT (s (t m)) r
-f +/> a = above withAgent a f
-{-# INLINABLE [1] (+/>) #-}
-
-
-infixr 6 +\>
-
-(+\>) :: M t s m 
-      => Monad m 
-      => (a -> EnT a o (t m) r) -> AgT a o (s m) r -> EpT (t (s m)) r
-f +\> a = below withAgent a f
-{-# INLINABLE [1] (+\>) #-}
 
 
 infixl 6 <<+
 
 (<<+) :: Monad m => AgT a o m r -> (a -> EnT a o m r) -> EpT m r
-x <<+ f = f +>> x
+a <<+ f = f +>> a
 
 
 infixl 6 <\+
@@ -116,23 +86,51 @@ infixl 6 <\+
 (<\+) :: M s t m 
       => Monad m 
       => AgT a o (s m) r -> (a -> EnT a o (t m) r) -> EpT (s (t m)) r
-x <\+ f = f +/> x
+a <\+ f = above (<<+) a f
 {-# INLINABLE (<\+) #-}
+
+
+infixr 6 +/>
+
+(+/>) :: M s t m 
+      => Monad m 
+      => (a -> EnT a o (t m) r) -> AgT a o (s m) r -> EpT (s (t m)) r
+f +/> a = a <\+ f
+{-# INLINABLE [1] (+/>) #-}
+
+
+infixl 6 </+
+
+(</+) :: M t s m 
+      => Monad m 
+      => AgT a o (s m) r -> (a -> EnT a o (t m) r) -> EpT (t (s m)) r
+a </+ f = below (<<+) a f
+{-# INLINABLE [1] (</+) #-}
+
+
+infixr 6 +\>
+
+(+\>) :: M t s m 
+      => Monad m 
+      => (a -> EnT a o (t m) r) -> AgT a o (s m) r -> EpT (t (s m)) r
+f +\> a = a </+ f  
+{-# INLINABLE [1] (+\>) #-}
 
 
 -------------------------------------------------------------------------------
 -- | 
 
-infixl 7 >>~
-
-(>>~) :: Monad m => EnT a o m r -> (o -> AgT a o m r) -> EpT m r
-e >>~ f = withEnvironment e f
-
 
 infixr 7 ~<<
 
 (~<<) :: Monad m => (o -> AgT a o m r) -> EnT a o m r -> EpT m r
-k ~<< p = p >>~ k
+f ~<< e = EpT $ unAgT . f P.~<< unEnT e
+
+
+infixl 7 >>~
+
+(>>~) :: Monad m => EnT a o m r -> (o -> AgT a o m r) -> EpT m r
+e >>~ f = f ~<< e
 
 
 infixl 7 >/~
@@ -140,7 +138,15 @@ infixl 7 >/~
 (>/~) :: M s t m
       => Monad m 
       => EnT a o (s m) r -> (o -> AgT a o (t m) r) -> EpT (s (t m)) r
-e >/~ f = above withEnvironment e f
+e >/~ f = f ~\< e
+
+
+infixr 7 ~\<
+
+(~\<) :: M s t m
+      => Monad m 
+      => (o -> AgT a o (t m) r) -> EnT a o (s m) r -> EpT (s (t m)) r
+f ~\< e = above (>>~) e f
 
 
 infixl 7 >\~
@@ -148,17 +154,23 @@ infixl 7 >\~
 (>\~) :: M t s m
       => Monad m 
       => EnT a o (s m) r -> (o -> AgT a o (t m) r) -> EpT (t (s m)) r
-e >\~ f = below withEnvironment e f
+e >\~ f = f ~/< e
 
 
+infixr 7 ~/<
+
+(~/<) :: M t s m
+      => Monad m 
+      => (o -> AgT a o (t m) r) -> EnT a o (s m) r -> EpT (t (s m)) r
+f ~/< e = below (>>~) e f
 
 -------------------------------------------------------------------------------
 -- | 
 
 {-| Compose an outcome generator with an action generator, creating an
-    episode awaiting an initial outcome state.
+    episode awaiting an initial outcome.
 @
-(f '>+>' g) x = f '+>>' g x
+(f '>+>' g) o = f '+>>' g o
 @
 
 -}
@@ -170,18 +182,18 @@ f >+> g = \x -> f +>> g x
 {-# INLINABLE (>+>) #-}
 
 
+infixr 7 <+<
+
+(<+<) :: Monad m => (o -> AgT a o m r) -> (a -> EnT a o m r) -> o -> EpT m r
+g <+< f = f >+> g
+
+
 infixl 7 /+>
 
 (/+>) :: M s t m 
       => Monad m 
       => (a -> EnT a o (t m) r) -> (o -> AgT a o (s m) r) -> o -> EpT (s (t m)) r
 f /+> g = \x -> f +/> g x
-
-
-infixr 7 <+<
-
-(<+<) :: Monad m => (o -> AgT a o m r) -> (a -> EnT a o m r) -> o -> EpT m r
-g <+< f = f >+> g
 
 
 infixr 7 <+\
@@ -195,11 +207,55 @@ g <+\ f = f /+> g
 -------------------------------------------------------------------------------
 -- | 
 
--- TODO add triples for these as well
-----infixl 8 <~<
+{-| Compose an outcome generator with an action generator, creating an
+    episode awaiting an initial action.
+@
+(f '>~>' g) a = f a '>>~' g
+@
+
+-}
+
 infixr 8 >~>
 
 (>~>) :: Monad m => (a -> EnT a o m r) -> (o -> AgT a o m r) -> a -> EpT m r
-f >~> g = \x -> f x >>~ g
+f >~> g = \a -> f a >>~ g
 {-# INLINABLE (>~>) #-}
 
+
+infixl 8 <~<
+
+(<~<) :: Monad m => (o -> AgT a o m r) -> (a -> EnT a o m r) -> a -> EpT m r
+g <~< f = f >~> g
+{-# INLINABLE (<~<) #-}
+
+
+infixl 7 /~>
+
+(/~>) :: M s t m 
+      => Monad m 
+      => (a -> EnT a o (s m) r) -> (o -> AgT a o (t m) r) -> a -> EpT (s (t m)) r
+f /~> g = \o -> f o >/~ g
+
+
+infixr 7 <~\
+
+(<~\) :: M s t m 
+      => Monad m 
+      => (o -> AgT a o (t m) r) -> (a -> EnT a o (s m) r) -> a -> EpT (s (t m)) r
+g <~\ f = f /~> g
+
+
+infixl 7 \~>
+
+(\~>) :: M t s m 
+      => Monad m 
+      => (a -> EnT a o (s m) r) -> (o -> AgT a o (t m) r) -> a -> EpT (t (s m)) r
+f \~> g = \o -> f o >\~ g
+
+
+infixr 7 <~/
+
+(<~/) :: M t s m 
+      => Monad m 
+      => (o -> AgT a o (t m) r) -> (a -> EnT a o (s m) r) -> a -> EpT (t (s m)) r
+g <~/ f = f \~> g

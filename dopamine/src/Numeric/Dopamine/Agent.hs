@@ -23,6 +23,7 @@ import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Morph (MFunctor(..), MMonad(..), MonadTrans(..)) 
 import Control.Monad.Reader.Class (MonadReader)
 import Control.Monad.State.Class (MonadState)
+import Control.Monad.Writer.Class (MonadWriter)
 import Control.Monad.Primitive (PrimMonad(..))
 import Data.Void (Void)
 
@@ -48,6 +49,7 @@ newtype AgT a o m r = AgT { unAgT :: P.Proxy a o () P.X m r }
 
 deriving instance MonadState s m => MonadState s (AgT a o m)
 deriving instance MonadReader r m => MonadReader r (AgT a o m)
+deriving instance MonadWriter w m => MonadWriter w (AgT a o m)
 
 
 instance PrimMonad m => PrimMonad (AgT a o m) where

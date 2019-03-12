@@ -76,12 +76,16 @@ above  :: (MFunctor t1, MFunctor t2, MFunctor t3, Monad m1, Monad m2, Monad (t3 
 above k x y = k (hoist (hoist lift) x) $ hoist lift . y
 
 
+-------------------------------------------------------------------------------
+-- | 
+
 infixr 6 +>>
 
 (+>>) :: Monad m 
       => (a -> EnT a o m r) -> AgT a o m r -> EpT m r 
 f +>> a = withAgent a f
 {-# INLINABLE [1] (+>>) #-}
+
 
 infixr 6 +/>
 
@@ -101,38 +105,10 @@ f +\> a = below withAgent a f
 {-# INLINABLE [1] (+\>) #-}
 
 
-infixl 7 >>~
-
-(>>~) :: Monad m => EnT a o m r -> (o -> AgT a o m r) -> EpT m r
-e >>~ f = withEnvironment e f
-
-
-infixl 7 >/~
-
-(>/~) :: M s t m
-      => Monad m 
-      => EnT a o (s m) r -> (o -> AgT a o (t m) r) -> EpT (s (t m)) r
-e >/~ f = above withEnvironment e f
-
--- TODO add triples for these as well
---infixr 7 ~<<
---infixl 8 <~<
---infixr 8 >~>
-
-infixl 7 >\~
-
-(>\~) :: M t s m
-      => Monad m 
-      => EnT a o (s m) r -> (o -> AgT a o (t m) r) -> EpT (t (s m)) r
-e >\~ f = below withEnvironment e f
-
-
-
 infixl 6 <<+
 
 (<<+) :: Monad m => AgT a o m r -> (a -> EnT a o m r) -> EpT m r
 x <<+ f = f +>> x
-
 
 
 infixl 6 <\+
@@ -143,6 +119,41 @@ infixl 6 <\+
 x <\+ f = f +/> x
 {-# INLINABLE (<\+) #-}
 
+
+-------------------------------------------------------------------------------
+-- | 
+
+infixl 7 >>~
+
+(>>~) :: Monad m => EnT a o m r -> (o -> AgT a o m r) -> EpT m r
+e >>~ f = withEnvironment e f
+
+
+infixr 7 ~<<
+
+(~<<) :: Monad m => (o -> AgT a o m r) -> EnT a o m r -> EpT m r
+k ~<< p = p >>~ k
+
+
+infixl 7 >/~
+
+(>/~) :: M s t m
+      => Monad m 
+      => EnT a o (s m) r -> (o -> AgT a o (t m) r) -> EpT (s (t m)) r
+e >/~ f = above withEnvironment e f
+
+
+infixl 7 >\~
+
+(>\~) :: M t s m
+      => Monad m 
+      => EnT a o (s m) r -> (o -> AgT a o (t m) r) -> EpT (t (s m)) r
+e >\~ f = below withEnvironment e f
+
+
+
+-------------------------------------------------------------------------------
+-- | 
 
 {-| Compose an outcome generator with an action generator, creating an
     episode awaiting an initial outcome state.
@@ -181,6 +192,14 @@ infixr 7 <+\
 g <+\ f = f /+> g
 
 
+-------------------------------------------------------------------------------
+-- | 
 
+-- TODO add triples for these as well
+----infixl 8 <~<
+infixr 8 >~>
 
+(>~>) :: Monad m => (a -> EnT a o m r) -> (o -> AgT a o m r) -> a -> EpT m r
+f >~> g = \x -> f x >>~ g
+{-# INLINABLE (>~>) #-}
 

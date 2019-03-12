@@ -37,7 +37,10 @@ import qualified System.Random.MWC as R
 import Numeric.Dopamine.Environment hiding (stepEnv)
 import qualified Numeric.Dopamine.Outcome as O
 
+main :: IO ()
+main = print "hi"
 
+{-
 newtype Environment a = 
   Environment { getEnvironment :: RWST (IORef BanditState) (D.DList Outcome) EnvState IO a }
   deriving
@@ -226,4 +229,4 @@ mean ss = armTotal ss / toEnum (armCount ss)
 addStats :: Action -> Stats -> BanditState -> BanditState
 addStats = Map.insertWith (<>)
 
-
+-}

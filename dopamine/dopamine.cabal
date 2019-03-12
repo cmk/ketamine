@@ -22,12 +22,10 @@ library
       Numeric.Dopamine
       Numeric.Dopamine.Agent
       Numeric.Dopamine.Environment
-      Numeric.Dopamine.Environment.Class
-      Numeric.Dopamine.Environment.State
       Numeric.Dopamine.Episode
       Numeric.Dopamine.Exception
       Numeric.Dopamine.Outcome
-      
+ 
   hs-source-dirs:
       src
   default-extensions: MultiParamTypeClasses OverloadedStrings LambdaCase TypeFamilies
@@ -68,3 +66,22 @@ executable bandits
   default-extensions:
       LambdaCase
 
+executable main
+  main-is: main.hs
+  build-depends:
+      base >=4.9 && <5.0
+    , containers
+    , dlist
+    , dopamine
+    , hashable
+    , mmorph
+    , mtl
+    , monad-loops
+    , mwc-random
+    , primitive
+    , safe-exceptions
+    , statistics
+    , transformers
+    , vector
+  default-extensions:
+      LambdaCase

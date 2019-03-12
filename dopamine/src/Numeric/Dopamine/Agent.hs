@@ -9,7 +9,8 @@
              TypeFamilies, 
              DeriveFunctor, 
              DeriveGeneric,
-             ScopedTypeVariables, 
+             ScopedTypeVariables,
+             StandaloneDeriving, 
              TypeApplications
 #-}
 
@@ -17,33 +18,109 @@
 
 module Numeric.Dopamine.Agent where
 
-import Control.Applicative (Alternative(..),liftA2)
-import Control.Exception.Safe 
-import Control.Monad
-import Control.Monad.Cont.Class 
-import Control.Monad.IO.Class
-import Control.Monad.Morph (MFunctor(..), MMonad(..), generalize)
-import Control.Monad.Primitive
-import Control.Monad.Reader.Class (MonadReader(..))
-import Control.Monad.State.Class (MonadState(..))
-import Control.Monad.Trans.Class (MonadTrans)
-import Control.Monad.Trans.Cont (ContT(..), runContT)
-import Control.Monad.Trans.Identity (IdentityT(..), mapIdentityT)
-import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Select
-import Data.Bool (bool)
-import Data.Default
-import Data.Functor.Identity
-import Data.Maybe
-import Pipes.Core (Proxy(..), Server, Client, Effect)
+import Control.Exception.Safe
+import Control.Monad.IO.Class (MonadIO(..)) 
+import Control.Monad.Morph (MFunctor(..), MMonad(..), MonadTrans(..)) 
+import Control.Monad.Reader.Class (MonadReader)
+import Control.Monad.State.Class (MonadState)
+import Control.Monad.Writer.Class (MonadWriter)
+import Control.Monad.Primitive (PrimMonad(..))
+import Data.Void (Void)
 
-import qualified Control.Monad.Catch as Catch
-import qualified Control.Monad.State.Class as State 
 import qualified Control.Monad.Trans.Class as Trans
-import qualified System.Random.MWC as R
 import qualified Pipes.Core as P
 
 
+-------------------------------------------------------------------------------
+-- | 
 
+
+-- Agt 
+newtype AgT a o m r = AgT { unAgT :: P.Proxy a o () P.X m r }
+  deriving  ( Functor
+            , Applicative
+            , MFunctor
+            , MMonad
+            , Monad
+            , MonadCatch
+            , MonadIO
+            , MonadThrow
+            , MonadTrans )
+
+deriving instance MonadState s m => MonadState s (AgT a o m)
+deriving instance MonadReader r m => MonadReader r (AgT a o m)
+deriving instance MonadWriter w m => MonadWriter w (AgT a o m)
+
+
+instance PrimMonad m => PrimMonad (AgT a o m) where
+
+  type PrimState (AgT a o m) = PrimState m
+  
+  primitive = Trans.lift . primitive
+
+
+runAgent :: Monad m => AgT Void () m r -> m r
+runAgent = P.runEffect . unAgT
+
+action :: Monad m => a -> AgT a o m o
+action = AgT . P.request
+
+bindAgent :: Monad m => AgT x y m r -> (x -> AgT a o m y) -> AgT a o m r
+bindAgent a f = AgT $ unAgT a P.//< unAgT . f
+
+
+
+{- $request
+    The 'request' category closely corresponds to the iteratee design pattern.
+
+    The 'request' category obeys the category laws, where 'request' is the
+    identity and ('\>\') is composition:
+
+@
+-- Left identity
+'request' '\>\' f = f
+
+\-\- Right identity
+f '\>\' 'request' = f
+
+\-\- Associativity
+(f '\>\' g) '\>\' h = f '\>\' (g '\>\' h)
+@
+
+-}
+
+
+infixl 4 //<
+
+(//<) 
+  :: Monad m => AgT x y m r -> (x -> AgT a o m y) -> AgT a o m r
+a //< f = bindAgent a f
+{-# INLINABLE (//<) #-}
+
+
+infixr 4 >\\ --
+ 
+-- | 'MonadAgent' equivalent of '<\\'
+(>\\) 
+  :: Monad m => (x -> AgT a o m y) -> AgT x y m r -> AgT a o m r
+f >\\ a = a //< f
+{-# INLINABLE (>\\) #-}
+
+
+infixl 5 \>\ --
+
+-- | 'MonadAgent' analog of '\<\'
+(\>\) 
+  :: Monad m => (y -> AgT a o m z) -> (x -> AgT y z m r) -> x -> AgT a o m r
+fy \>\ fx = \x -> fy >\\ fx x
+{-# INLINABLE (\>\) #-}
+
+
+infixr 5 /</
+
+-- | 'MonadAgent' analog of '/>/'
+(/</) 
+  :: Monad m => (x -> AgT y z m r) -> (y -> AgT a o m z) -> x -> AgT a o m r
+fx /</ fy = fy \>\ fx
+{-# INLINABLE (/</) #-}
 

@@ -61,6 +61,14 @@ runEnvironment = P.runEffect . unEnT
 outcome :: Monad m => o -> EnT a o m a
 outcome = EnT . P.respond
 
+-- | Loop an action handler in an 'EnT'.
+handler :: Monad m => (a -> m (Maybe o)) -> a -> EnT a o m ()
+handler f = loop where
+    loop a = do
+        mo <- lift . f $ a
+        case mo of
+            Nothing -> return ()
+            Just o -> outcome o >>= loop
 
 infixl 3 //>
 

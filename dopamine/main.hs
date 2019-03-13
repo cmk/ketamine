@@ -21,7 +21,7 @@ import Control.Applicative (Alternative(..),liftA2)
 import Control.Exception.Safe 
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Morph -- (MFunctor(..), MMonad(..), MonadTrans(..)) 
+import Control.Monad.Morph 
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
 import Data.IORef
@@ -38,7 +38,7 @@ main = test2
 -- TODO give example using ether
 en :: Int -> EnT Int Int (ReaderT (IORef Int) IO) ()
 en = loop where
-    loop = \i -> do
+    loop i = do
          r <- lift ask
          j <- liftIO $ readIORef r
          liftIO $ print $ "en state: " ++ show j
@@ -47,6 +47,7 @@ en = loop where
              then return ()
              else outcome i >>= loop
 
+-- TODO ignoring input like this is confusing
 ag :: AgT Int Int (ReaderT (IORef Int) IO) ()
 ag = action 1 >>= loop where
     loop _ = do

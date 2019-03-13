@@ -62,31 +62,31 @@ narms = 10
 
 main :: IO ()
 main = do
-  casino <- envState narms
-  bandit <- defaultBanditState narms
-  let ep :: SharedState ()
-      ep = runEpisode $ stepEnv >~> stepBandit 0.1 $ 9
-  res <- snd <$> evalRWST ep bandit casino
-  mapM_ print $ D.toList res
+    casino <- envState narms
+    bandit <- defaultBanditState narms
+    let ep :: SharedState ()
+        ep = runEpisode $ stepEnv >~> stepBandit 0.1 $ 9
+    res <- snd <$> evalRWST ep bandit casino
+    mapM_ print $ D.toList res
 
 -------------------------------------------------------------------------------
 -- | Environment
 --
 data EnvState = 
-  EnvState { arms :: Vector N.NormalDistribution , gen :: R.GenIO, pulls :: Int }
+    EnvState { arms :: Vector N.NormalDistribution , gen :: R.GenIO, pulls :: Int }
 
 instance Show EnvState where
-  show c = "EnvState" ++
-    "{ means = " ++ 
-      show (fmap Dist.mean . V.toList $ arms c) ++ 
-        ", pulls = " ++ show (pulls c) ++ " }"
+    show c = "EnvState" ++
+      "{ means = " ++ 
+        show (fmap Dist.mean . V.toList $ arms c) ++ 
+          ", pulls = " ++ show (pulls c) ++ " }"
 
 mkEnvState :: Int -> [Double] -> IO EnvState
 mkEnvState n vars = do
-  gen <- R.createSystemRandom
-  means <- replicateM n $ R.uniform gen
-  let arms = V.fromList $ zipWith N.normalDistr (reverse $ sort means) vars
-  return $ EnvState arms gen 0
+    gen <- R.createSystemRandom
+    means <- replicateM n $ R.uniform gen
+    let arms = V.fromList $ zipWith N.normalDistr (reverse $ sort means) vars
+    return $ EnvState arms gen 0
 
 -- | Default config of a n-armed bandit
 envState :: Int -> IO EnvState
@@ -94,19 +94,20 @@ envState n = mkEnvState n $ replicate n 1.0
 
 genContVar :: Dist.ContGen d => d -> Environment Double
 genContVar d = do
-  g <- gets gen
-  liftIO $ Dist.genContVar d g
+    g <- gets gen
+    liftIO $ Dist.genContVar d g
 
 stepEnv :: Action -> Environment ()
 stepEnv = loop where
-  loop act = do
-    rwd <- genContVar =<< (! act) . arms <$> get
-    modify $ \(EnvState a g p) -> EnvState a g (p+1)
-    r <- ask
-    liftIO $ modifyIORef r $ addStats act (Stats act rwd)
-    n <- gets pulls
-    if n >= episodeLength then return () 
-      else outcome (O.Outcome act rwd) >>= loop
+    loop act = do
+        rwd <- genContVar =<< (! act) . arms <$> get
+        modify $ \(EnvState a g p) -> EnvState a g (p+1)
+        r <- ask
+        liftIO $ modifyIORef r $ addStats act (Stats act rwd)
+        n <- gets pulls
+        if n >= episodeLength 
+            then return () 
+            else outcome (O.Outcome act rwd) >>= loop
 
 ------------------------------------------------------------------------------
 -- | Bandit
@@ -138,36 +139,34 @@ addStats = Map.insertWith (<>)
 
 epsilonGreedy :: (R.Variate e, Ord e, Ord r) => [(a, r)] -> e -> SharedState a
 epsilonGreedy acts = 
-  epsilonChoice (fst $ maximumBy (comparing snd) acts) acts
+    epsilonChoice (fst $ maximumBy (comparing snd) acts) acts
 
 epsilonChoice :: (R.Variate e, Ord e) => a -> [(a, r)] -> e -> SharedState a
 epsilonChoice a acts eps = do
-  g <- gets gen
-  compare eps <$> R.uniform g >>= \case
-    LT -> pure a
-    _  -> do
-      i <- R.uniformR (0, length acts) g
-      pure . fst . head $ drop (i-1) acts
+    g <- gets gen
+    compare eps <$> R.uniform g >>= \case
+        LT -> pure a
+        _  -> do
+            i <- R.uniformR (0, length acts) g
+            pure . fst . head $ drop (i-1) acts
 
 banditState :: Int -> Stats -> IO (IORef BanditState)
 banditState n s = do
-  r <- newIORef mempty
-  let init = Map.fromList $ take n $ zip [0..] (repeat s)
-  writeIORef r init
-  return r
+    r <- newIORef mempty
+    let init = Map.fromList $ take n $ zip [0..] (repeat s)
+    writeIORef r init
+    return r
 
 defaultBanditState :: Int -> IO (IORef BanditState)
 defaultBanditState n = banditState n mempty
 
 stepBandit :: Float -> Outcome -> Agent ()
 stepBandit eps = loop where
-  loop o@(O.Outcome act rwd) = do
-    tell . pure $ o
-    r <- ask
-    liftIO $ modifyIORef r $ addStats act (Stats act rwd)
-    s <- liftIO $ readIORef r
-    let rwds = Map.map mean s
-    --liftIO $ print $ "rewards: " ++ show rwds
-    -- modify $ \(EnvState a g p) -> EnvState a g (p+1)
-    a <- lift $ epsilonGreedy (Map.toList rwds) eps
-    action a >>= loop
+    loop o@(O.Outcome act rwd) = do
+        tell . pure $ o
+        r <- ask
+        liftIO $ modifyIORef r $ addStats act (Stats act rwd)
+        s <- liftIO $ readIORef r
+        let rwds = Map.map mean s
+        a <- lift $ epsilonGreedy (Map.toList rwds) eps
+        action a >>= loop

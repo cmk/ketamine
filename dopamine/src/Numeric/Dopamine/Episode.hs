@@ -23,6 +23,7 @@ import Numeric.Dopamine.Agent
 import Numeric.Dopamine.Environment
 import Numeric.Dopamine.Exception (EpisodeCompleted(..))
 
+--import Pipes.Safe
 import qualified Pipes.Core as P
 
 
@@ -46,6 +47,7 @@ reflectAgent = EnT . P.reflect . unAgT
 
 reflectEnvironment :: Monad m => EnT a o m r -> AgT o a m r
 reflectEnvironment = AgT . P.reflect . unEnT
+
 
 -------------------------------------------------------------------------------
 -- | 

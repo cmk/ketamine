@@ -1,0 +1,740 @@
+
+==================== Tidy Core ====================
+2017-07-25 22:02:59.202853796 UTC
+
+Result size of Tidy Core = {terms: 574, types: 638, coercions: 19}
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule1
+$trModule1 = TrNameS "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule2
+$trModule2 = TrNameS "Main"#
+
+-- RHS size: {terms: 3, types: 0, coercions: 0}
+$trModule
+$trModule = Module $trModule1 $trModule2
+
+-- RHS size: {terms: 1, types: 6, coercions: 1}
+$d~
+$d~ = Eq# @~ ...
+
+-- RHS size: {terms: 2, types: 4, coercions: 0}
+$d~1
+$d~1 = $f~kab $d~
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+$dMonadRandom
+$dMonadRandom = $fMonadRandomRandomT1 $fMonadIOIO
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+$dMonadRandom1
+$dMonadRandom1 = $fMonadRandomRandomT2 $fMonadIdentity
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+$dMonadRandom2
+$dMonadRandom2 = $fMonadRandomRandomT3 $fMonadIdentity
+
+-- RHS size: {terms: 3, types: 1, coercions: 6}
+$dMonadRandom3
+$dMonadRandom3 =
+  $fMonadRandomRandomT $fPrimMonadIO ($d~1 `cast` ...)
+
+-- RHS size: {terms: 84, types: 80, coercions: 0}
+countDownGen
+countDownGen =
+  \ @ a @ g $dNum g1 action limit ->
+    let {
+      go
+      go =
+        \ @ t $dNum1 $dOrd eta eta1 eta2 ->
+          letrec {
+            go1
+            go1 =
+              \ n x gen ->
+                case n of n1 { __DEFAULT ->
+                case x of x1 { __DEFAULT ->
+                case <= $dOrd n1 (fromInteger $dNum1 0) of _ {
+                  False ->
+                    let {
+                      ds
+                      ds = action gen } in
+                    let {
+                      y
+                      y = case ds of _ { (y1, gen') -> y1 } } in
+                    let {
+                      gen'
+                      gen' = case ds of _ { (y1, gen'1) -> gen'1 } } in
+                    let {
+                      ds1
+                      ds1 = (y, gen') } in
+                    let {
+                      y1
+                      y1 = case ds1 of _ { (y2, gen'1) -> y2 } } in
+                    let {
+                      gen'1
+                      gen'1 = case ds1 of _ { (y2, gen'2) -> gen'2 } } in
+                    go1 (- $dNum1 n1 (fromInteger $dNum1 1)) (+ $dNum x1 y1) gen'1;
+                  True -> x1
+                }
+                }
+                }; } in
+          go1 eta eta1 eta2 } in
+    go $fNumInt $fOrdInt limit (fromInteger $dNum 0) g1
+
+-- RHS size: {terms: 10, types: 11, coercions: 0}
+uniformTFGen
+uniformTFGen =
+  \ @ a $dNum $dRandom g ->
+    countDownGen $dNum g (random $dRandom $fRandomGenTFGen)
+
+-- RHS size: {terms: 10, types: 11, coercions: 0}
+uniformStdGen
+uniformStdGen =
+  \ @ a $dNum $dRandom g ->
+    countDownGen $dNum g (random $dRandom $fRandomGenStdGen)
+
+-- RHS size: {terms: 61, types: 56, coercions: 0}
+countDown
+countDown =
+  \ @ m @ a $dMonad $dNum eta eta1 ->
+    let {
+      $dApplicative
+      $dApplicative = $p1Monad $dMonad } in
+    let {
+      go
+      go =
+        \ @ t $dNum1 $dOrd eta2 eta3 ->
+          letrec {
+            go1
+            go1 =
+              \ n x ->
+                case n of n1 { __DEFAULT ->
+                case x of x1 { __DEFAULT ->
+                case <= $dOrd n1 (fromInteger $dNum1 0) of _ {
+                  False ->
+                    >>=
+                      $dMonad
+                      eta
+                      (\ y -> go1 (- $dNum1 n1 (fromInteger $dNum1 1)) (+ $dNum x1 y));
+                  True -> pure $dApplicative x1
+                }
+                }
+                }; } in
+          go1 eta2 eta3 } in
+    go $fNumInt $fOrdInt eta1 (fromInteger $dNum 0)
+
+-- RHS size: {terms: 24, types: 52, coercions: 0}
+taktRandom
+taktRandom =
+  \ @ m
+    @ g
+    @ d
+    @ a
+    $dMonad
+    $dMonadRandom4
+    $dDistribution
+    $dNum
+    eta
+    eta1 ->
+    let {
+      $dMonad1
+      $dMonad1 = $p1MonadRandom $dMonadRandom4 } in
+    . (evalRandomT $dMonad eta)
+      (countDown
+         $dMonad1 $dNum (getRandom $dMonadRandom4 $dDistribution eta1))
+
+-- RHS size: {terms: 21, types: 43, coercions: 0}
+taktRandomPure
+taktRandomPure =
+  \ @ g @ d @ a $dMonadRandom4 $dDistribution $dNum eta eta1 ->
+    let {
+      $dMonad
+      $dMonad = $p1MonadRandom $dMonadRandom4 } in
+    . (evalRandom eta)
+      (countDown
+         $dMonad $dNum (getRandom $dMonadRandom4 $dDistribution eta1))
+
+-- RHS size: {terms: 21, types: 30, coercions: 0}
+uniformMonadRandom
+uniformMonadRandom =
+  \ @ a $dNum $dRandom ->
+    let {
+      $dMonadRandom4
+      $dMonadRandom4 =
+        $fMonadRandomRandT $fRandomGenStdGen $fMonadIdentity } in
+    let {
+      $dMonad
+      $dMonad = $fMonadRandT $fMonadIdentity } in
+    \ g n ->
+      evalRand
+        (countDown $dMonad $dNum (getRandom $dMonadRandom4 $dRandom) n) g
+
+-- RHS size: {terms: 11, types: 11, coercions: 0}
+uniformMWC
+uniformMWC =
+  \ @ a $dNum $dVariate g ->
+    countDown $fMonadIO $dNum (uniform $dVariate $fPrimMonadIO g)
+
+-- RHS size: {terms: 10, types: 10, coercions: 0}
+uniformMTGen
+uniformMTGen =
+  \ @ a $dNum $dMTRandom g ->
+    countDown $fMonadIO $dNum (random $dMTRandom g)
+
+-- RHS size: {terms: 5, types: 3, coercions: 0}
+uniformPureMTInt
+uniformPureMTInt = \ g -> countDownGen $fNumInt g randomInt
+
+-- RHS size: {terms: 5, types: 3, coercions: 0}
+uniformPureMTDouble
+uniformPureMTDouble =
+  \ g -> countDownGen $fNumDouble g randomDouble
+
+-- RHS size: {terms: 269, types: 145, coercions: 12}
+main
+main =
+  >>=
+    $fMonadIO
+    newStdGen
+    (\ std ->
+       >>=
+         $fMonadIO
+         newPureMT
+         (\ p64 ->
+            >>=
+              $fMonadIO
+              newTFGen
+              (\ tf ->
+                 >>=
+                   $fMonadIO
+                   createSystemRandom
+                   (\ mwc ->
+                      >>=
+                        $fMonadIO
+                        (=<<
+                           $fMonadIO
+                           (. newMTGen Just)
+                           (uniform $fVariateWord32 $fPrimMonadIO mwc))
+                        (\ mt ->
+                           let {
+                             n
+                             n = I# 3# } in
+                           defaultMain
+                             (: (bgroup
+                                   (unpackCString# "int"#)
+                                   (: ((bench (unpackCString# "StdGen"#))
+                                         (whnf (uniformStdGen $fNumInt $fRandomInt std) n))
+                                      (: ((bench (unpackCString# "PureMT"#))
+                                            (whnf (uniformPureMTInt p64) n))
+                                         (: ((bench (unpackCString# "TFGen"#))
+                                               (whnf (uniformTFGen $fNumInt $fRandomInt tf) n))
+                                            (: ((bench (unpackCString# "MonadRandom"#))
+                                                  (whnf
+                                                     (uniformMonadRandom $fNumInt $fRandomInt std)
+                                                     n))
+                                               (: ((bench (unpackCString# "MT"#))
+                                                     (whnfIO
+                                                        ((countDown
+                                                            $fMonadIO
+                                                            $fNumInt
+                                                            (random $fMTRandomInt mt))
+                                                           n)))
+                                                  (: ((bench (unpackCString# "MWC"#))
+                                                        (whnfIO
+                                                           ((countDown
+                                                               $fMonadIO
+                                                               $fNumInt
+                                                               (uniform
+                                                                  $fVariateInt $fPrimMonadIO mwc))
+                                                              n)))
+                                                     [])))))))
+                                (: (bgroup
+                                      (unpackCString# "double"#)
+                                      (: ((bench (unpackCString# "StdGen"#))
+                                            (whnf (uniformStdGen $fNumDouble $fRandomDouble std) n))
+                                         (: ((bench (unpackCString# "PureMT"#))
+                                               (whnf (uniformPureMTDouble p64) n))
+                                            (: ((bench (unpackCString# "MonadRandom"#))
+                                                  (whnf
+                                                     (uniformMonadRandom
+                                                        $fNumDouble $fRandomDouble std)
+                                                     n))
+                                               (: ((bench (unpackCString# "MT"#))
+                                                     (whnfIO
+                                                        ((countDown
+                                                            $fMonadIO
+                                                            $fNumDouble
+                                                            (random $fMTRandomDouble mt))
+                                                           n)))
+                                                  (: ((bench (unpackCString# "MWC"#))
+                                                        (whnfIO
+                                                           ((countDown
+                                                               $fMonadIO
+                                                               $fNumDouble
+                                                               (uniform
+                                                                  $fVariateDouble
+                                                                  $fPrimMonadIO
+                                                                  mwc))
+                                                              n)))
+                                                     []))))))
+                                   (: (bgroup
+                                         (unpackCString# "takt/uniform"#)
+                                         (: ((bench (unpackCString# "StdGen"#))
+                                               (whnf
+                                                  (taktRandomPure
+                                                     $dMonadRandom2
+                                                     $fDistributionStdUniformInt
+                                                     $fNumInt
+                                                     std
+                                                     StdUniform)
+                                                  n))
+                                            (: ((bench (unpackCString# "PureMT"#))
+                                                  (whnf
+                                                     (taktRandomPure
+                                                        $dMonadRandom1
+                                                        $fDistributionStdUniformInt
+                                                        $fNumInt
+                                                        p64
+                                                        StdUniform)
+                                                     n))
+                                               (: ((bench (unpackCString# "DevURandom"#))
+                                                     (whnfIO
+                                                        (taktRandom
+                                                           $fMonadIO
+                                                           $dMonadRandom
+                                                           $fDistributionStdUniformInt
+                                                           $fNumInt
+                                                           DevURandom
+                                                           StdUniform
+                                                           n)))
+                                                  (: ((bench (unpackCString# "MWC"#))
+                                                        (whnfIO
+                                                           (taktRandom
+                                                              $fMonadIO
+                                                              ($dMonadRandom3 `cast` ...)
+                                                              $fDistributionStdUniformInt
+                                                              $fNumInt
+                                                              mwc
+                                                              StdUniform
+                                                              n)))
+                                                     [])))))
+                                      (: (bgroup
+                                            (unpackCString# "takt/normal"#)
+                                            (: ((bench (unpackCString# "StdGen"#))
+                                                  (whnf
+                                                     (taktRandomPure
+                                                        $dMonadRandom2
+                                                        $fDistributionNormalDouble
+                                                        $fNumDouble
+                                                        std
+                                                        StdNormal)
+                                                     n))
+                                               (: ((bench (unpackCString# "PureMT"#))
+                                                     (whnf
+                                                        (taktRandomPure
+                                                           $dMonadRandom1
+                                                           $fDistributionNormalDouble
+                                                           $fNumDouble
+                                                           p64
+                                                           StdNormal)
+                                                        n))
+                                                  (: ((bench (unpackCString# "DevURandom"#))
+                                                        (whnfIO
+                                                           (taktRandom
+                                                              $fMonadIO
+                                                              $dMonadRandom
+                                                              $fDistributionNormalDouble
+                                                              $fNumDouble
+                                                              DevURandom
+                                                              StdNormal
+                                                              n)))
+                                                     (: ((bench (unpackCString# "MWC"#))
+                                                           (whnfIO
+                                                              (taktRandom
+                                                                 $fMonadIO
+                                                                 ($dMonadRandom3 `cast` ...)
+                                                                 $fDistributionNormalDouble
+                                                                 $fNumDouble
+                                                                 mwc
+                                                                 StdNormal
+                                                                 n)))
+                                                        [])))))
+                                         [])))))))))
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+main
+main = runMainIO main
+
+
+
+==================== Tidy Core ====================
+2017-07-25 22:03:11.281011629 UTC
+
+Result size of Tidy Core = {terms: 574, types: 638, coercions: 19}
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule1
+$trModule1 = TrNameS "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0}
+$trModule2
+$trModule2 = TrNameS "Main"#
+
+-- RHS size: {terms: 3, types: 0, coercions: 0}
+$trModule
+$trModule = Module $trModule1 $trModule2
+
+-- RHS size: {terms: 1, types: 6, coercions: 1}
+$d~
+$d~ = Eq# @~ ...
+
+-- RHS size: {terms: 2, types: 4, coercions: 0}
+$d~1
+$d~1 = $f~kab $d~
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+$dMonadRandom
+$dMonadRandom = $fMonadRandomRandomT1 $fMonadIOIO
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+$dMonadRandom1
+$dMonadRandom1 = $fMonadRandomRandomT2 $fMonadIdentity
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+$dMonadRandom2
+$dMonadRandom2 = $fMonadRandomRandomT3 $fMonadIdentity
+
+-- RHS size: {terms: 3, types: 1, coercions: 6}
+$dMonadRandom3
+$dMonadRandom3 =
+  $fMonadRandomRandomT $fPrimMonadIO ($d~1 `cast` ...)
+
+-- RHS size: {terms: 84, types: 80, coercions: 0}
+countDownGen
+countDownGen =
+  \ @ a @ g $dNum g1 action limit ->
+    let {
+      go
+      go =
+        \ @ t $dNum1 $dOrd eta eta1 eta2 ->
+          letrec {
+            go1
+            go1 =
+              \ n x gen ->
+                case n of n1 { __DEFAULT ->
+                case x of x1 { __DEFAULT ->
+                case <= $dOrd n1 (fromInteger $dNum1 0) of _ {
+                  False ->
+                    let {
+                      ds
+                      ds = action gen } in
+                    let {
+                      y
+                      y = case ds of _ { (y1, gen') -> y1 } } in
+                    let {
+                      gen'
+                      gen' = case ds of _ { (y1, gen'1) -> gen'1 } } in
+                    let {
+                      ds1
+                      ds1 = (y, gen') } in
+                    let {
+                      y1
+                      y1 = case ds1 of _ { (y2, gen'1) -> y2 } } in
+                    let {
+                      gen'1
+                      gen'1 = case ds1 of _ { (y2, gen'2) -> gen'2 } } in
+                    go1 (- $dNum1 n1 (fromInteger $dNum1 1)) (+ $dNum x1 y1) gen'1;
+                  True -> x1
+                }
+                }
+                }; } in
+          go1 eta eta1 eta2 } in
+    go $fNumInt $fOrdInt limit (fromInteger $dNum 0) g1
+
+-- RHS size: {terms: 10, types: 11, coercions: 0}
+uniformTFGen
+uniformTFGen =
+  \ @ a $dNum $dRandom g ->
+    countDownGen $dNum g (random $dRandom $fRandomGenTFGen)
+
+-- RHS size: {terms: 10, types: 11, coercions: 0}
+uniformStdGen
+uniformStdGen =
+  \ @ a $dNum $dRandom g ->
+    countDownGen $dNum g (random $dRandom $fRandomGenStdGen)
+
+-- RHS size: {terms: 61, types: 56, coercions: 0}
+countDown
+countDown =
+  \ @ m @ a $dMonad $dNum eta eta1 ->
+    let {
+      $dApplicative
+      $dApplicative = $p1Monad $dMonad } in
+    let {
+      go
+      go =
+        \ @ t $dNum1 $dOrd eta2 eta3 ->
+          letrec {
+            go1
+            go1 =
+              \ n x ->
+                case n of n1 { __DEFAULT ->
+                case x of x1 { __DEFAULT ->
+                case <= $dOrd n1 (fromInteger $dNum1 0) of _ {
+                  False ->
+                    >>=
+                      $dMonad
+                      eta
+                      (\ y -> go1 (- $dNum1 n1 (fromInteger $dNum1 1)) (+ $dNum x1 y));
+                  True -> pure $dApplicative x1
+                }
+                }
+                }; } in
+          go1 eta2 eta3 } in
+    go $fNumInt $fOrdInt eta1 (fromInteger $dNum 0)
+
+-- RHS size: {terms: 24, types: 52, coercions: 0}
+taktRandom
+taktRandom =
+  \ @ m
+    @ g
+    @ d
+    @ a
+    $dMonad
+    $dMonadRandom4
+    $dDistribution
+    $dNum
+    eta
+    eta1 ->
+    let {
+      $dMonad1
+      $dMonad1 = $p1MonadRandom $dMonadRandom4 } in
+    . (evalRandomT $dMonad eta)
+      (countDown
+         $dMonad1 $dNum (getRandom $dMonadRandom4 $dDistribution eta1))
+
+-- RHS size: {terms: 21, types: 43, coercions: 0}
+taktRandomPure
+taktRandomPure =
+  \ @ g @ d @ a $dMonadRandom4 $dDistribution $dNum eta eta1 ->
+    let {
+      $dMonad
+      $dMonad = $p1MonadRandom $dMonadRandom4 } in
+    . (evalRandom eta)
+      (countDown
+         $dMonad $dNum (getRandom $dMonadRandom4 $dDistribution eta1))
+
+-- RHS size: {terms: 21, types: 30, coercions: 0}
+uniformMonadRandom
+uniformMonadRandom =
+  \ @ a $dNum $dRandom ->
+    let {
+      $dMonadRandom4
+      $dMonadRandom4 =
+        $fMonadRandomRandT $fRandomGenStdGen $fMonadIdentity } in
+    let {
+      $dMonad
+      $dMonad = $fMonadRandT $fMonadIdentity } in
+    \ g n ->
+      evalRand
+        (countDown $dMonad $dNum (getRandom $dMonadRandom4 $dRandom) n) g
+
+-- RHS size: {terms: 11, types: 11, coercions: 0}
+uniformMWC
+uniformMWC =
+  \ @ a $dNum $dVariate g ->
+    countDown $fMonadIO $dNum (uniform $dVariate $fPrimMonadIO g)
+
+-- RHS size: {terms: 10, types: 10, coercions: 0}
+uniformMTGen
+uniformMTGen =
+  \ @ a $dNum $dMTRandom g ->
+    countDown $fMonadIO $dNum (random $dMTRandom g)
+
+-- RHS size: {terms: 5, types: 3, coercions: 0}
+uniformPureMTInt
+uniformPureMTInt = \ g -> countDownGen $fNumInt g randomInt
+
+-- RHS size: {terms: 5, types: 3, coercions: 0}
+uniformPureMTDouble
+uniformPureMTDouble =
+  \ g -> countDownGen $fNumDouble g randomDouble
+
+-- RHS size: {terms: 269, types: 145, coercions: 12}
+main
+main =
+  >>=
+    $fMonadIO
+    newStdGen
+    (\ std ->
+       >>=
+         $fMonadIO
+         newPureMT
+         (\ p64 ->
+            >>=
+              $fMonadIO
+              newTFGen
+              (\ tf ->
+                 >>=
+                   $fMonadIO
+                   createSystemRandom
+                   (\ mwc ->
+                      >>=
+                        $fMonadIO
+                        (=<<
+                           $fMonadIO
+                           (. newMTGen Just)
+                           (uniform $fVariateWord32 $fPrimMonadIO mwc))
+                        (\ mt ->
+                           let {
+                             n
+                             n = I# 3# } in
+                           defaultMain
+                             (: (bgroup
+                                   (unpackCString# "int"#)
+                                   (: ((bench (unpackCString# "StdGen"#))
+                                         (whnf (uniformStdGen $fNumInt $fRandomInt std) n))
+                                      (: ((bench (unpackCString# "PureMT"#))
+                                            (whnf (uniformPureMTInt p64) n))
+                                         (: ((bench (unpackCString# "TFGen"#))
+                                               (whnf (uniformTFGen $fNumInt $fRandomInt tf) n))
+                                            (: ((bench (unpackCString# "MonadRandom"#))
+                                                  (whnf
+                                                     (uniformMonadRandom $fNumInt $fRandomInt std)
+                                                     n))
+                                               (: ((bench (unpackCString# "MT"#))
+                                                     (whnfIO
+                                                        ((countDown
+                                                            $fMonadIO
+                                                            $fNumInt
+                                                            (random $fMTRandomInt mt))
+                                                           n)))
+                                                  (: ((bench (unpackCString# "MWC"#))
+                                                        (whnfIO
+                                                           ((countDown
+                                                               $fMonadIO
+                                                               $fNumInt
+                                                               (uniform
+                                                                  $fVariateInt $fPrimMonadIO mwc))
+                                                              n)))
+                                                     [])))))))
+                                (: (bgroup
+                                      (unpackCString# "double"#)
+                                      (: ((bench (unpackCString# "StdGen"#))
+                                            (whnf (uniformStdGen $fNumDouble $fRandomDouble std) n))
+                                         (: ((bench (unpackCString# "PureMT"#))
+                                               (whnf (uniformPureMTDouble p64) n))
+                                            (: ((bench (unpackCString# "MonadRandom"#))
+                                                  (whnf
+                                                     (uniformMonadRandom
+                                                        $fNumDouble $fRandomDouble std)
+                                                     n))
+                                               (: ((bench (unpackCString# "MT"#))
+                                                     (whnfIO
+                                                        ((countDown
+                                                            $fMonadIO
+                                                            $fNumDouble
+                                                            (random $fMTRandomDouble mt))
+                                                           n)))
+                                                  (: ((bench (unpackCString# "MWC"#))
+                                                        (whnfIO
+                                                           ((countDown
+                                                               $fMonadIO
+                                                               $fNumDouble
+                                                               (uniform
+                                                                  $fVariateDouble
+                                                                  $fPrimMonadIO
+                                                                  mwc))
+                                                              n)))
+                                                     []))))))
+                                   (: (bgroup
+                                         (unpackCString# "takt/uniform"#)
+                                         (: ((bench (unpackCString# "StdGen"#))
+                                               (whnf
+                                                  (taktRandomPure
+                                                     $dMonadRandom2
+                                                     $fDistributionStdUniformInt
+                                                     $fNumInt
+                                                     std
+                                                     StdUniform)
+                                                  n))
+                                            (: ((bench (unpackCString# "PureMT"#))
+                                                  (whnf
+                                                     (taktRandomPure
+                                                        $dMonadRandom1
+                                                        $fDistributionStdUniformInt
+                                                        $fNumInt
+                                                        p64
+                                                        StdUniform)
+                                                     n))
+                                               (: ((bench (unpackCString# "DevURandom"#))
+                                                     (whnfIO
+                                                        (taktRandom
+                                                           $fMonadIO
+                                                           $dMonadRandom
+                                                           $fDistributionStdUniformInt
+                                                           $fNumInt
+                                                           DevURandom
+                                                           StdUniform
+                                                           n)))
+                                                  (: ((bench (unpackCString# "MWC"#))
+                                                        (whnfIO
+                                                           (taktRandom
+                                                              $fMonadIO
+                                                              ($dMonadRandom3 `cast` ...)
+                                                              $fDistributionStdUniformInt
+                                                              $fNumInt
+                                                              mwc
+                                                              StdUniform
+                                                              n)))
+                                                     [])))))
+                                      (: (bgroup
+                                            (unpackCString# "takt/normal"#)
+                                            (: ((bench (unpackCString# "StdGen"#))
+                                                  (whnf
+                                                     (taktRandomPure
+                                                        $dMonadRandom2
+                                                        $fDistributionNormalDouble
+                                                        $fNumDouble
+                                                        std
+                                                        StdNormal)
+                                                     n))
+                                               (: ((bench (unpackCString# "PureMT"#))
+                                                     (whnf
+                                                        (taktRandomPure
+                                                           $dMonadRandom1
+                                                           $fDistributionNormalDouble
+                                                           $fNumDouble
+                                                           p64
+                                                           StdNormal)
+                                                        n))
+                                                  (: ((bench (unpackCString# "DevURandom"#))
+                                                        (whnfIO
+                                                           (taktRandom
+                                                              $fMonadIO
+                                                              $dMonadRandom
+                                                              $fDistributionNormalDouble
+                                                              $fNumDouble
+                                                              DevURandom
+                                                              StdNormal
+                                                              n)))
+                                                     (: ((bench (unpackCString# "MWC"#))
+                                                           (whnfIO
+                                                              (taktRandom
+                                                                 $fMonadIO
+                                                                 ($dMonadRandom3 `cast` ...)
+                                                                 $fDistributionNormalDouble
+                                                                 $fNumDouble
+                                                                 mwc
+                                                                 StdNormal
+                                                                 n)))
+                                                        [])))))
+                                         [])))))))))
+
+-- RHS size: {terms: 2, types: 1, coercions: 0}
+main
+main = runMainIO main
+
+

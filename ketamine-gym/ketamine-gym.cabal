@@ -1,0 +1,45 @@
+cabal-version: 1.22
+
+name:           ketamine-gym
+version:        0.0.0.1
+synopsis:       Reinforcement Learning in Haskell
+description:    A very approximate port of the Google RL lib.
+category:       reinforcement learning, machine learning, artificial intelligence
+homepage:       https://github.com/cmk/ketamine
+bug-reports:    https://github.com/cmk/ketamine/issues
+author:         Chris McKinlay
+maintainer:     Chris McKinlay
+copyright:      2019 Chris McKinlay
+license:        BSD3
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/cmk/ketamine
+
+library
+  exposed-modules:
+      Numeric.Ketamine.Environment.Gym.Internal
+      Numeric.Ketamine.Environment.Gym.ClassicControl.PendulumV0
+  hs-source-dirs:
+      src
+  default-extensions: MultiParamTypeClasses OverloadedStrings LambdaCase TypeFamilies
+  ghc-options: -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
+  build-depends:
+      aeson >=1.0
+    , base >=4.9 && <5.0
+    , dlist
+    , ketamine
+    , gym-http-api >=0.1.0.1
+    , hashable
+    , http-client >=0.4
+    , mtl
+    , mwc-random
+    , pipes
+    , pipes-safe
+    , primitive
+    , safe-exceptions
+    , servant-client >=0.9
+    , text
+    , transformers
+  default-language: Haskell2010

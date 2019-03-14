@@ -2,4 +2,6 @@ resolver: lts-13.10
 flags: {}
 
 packages:
-  - dopamine
+  - ketamine
+  - ketamine-gym
+

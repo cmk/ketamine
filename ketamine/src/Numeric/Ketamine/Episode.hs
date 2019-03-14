@@ -13,16 +13,17 @@
              TypeApplications
 #-}
 
-module Numeric.Dopamine.Episode where
+module Numeric.Ketamine.Episode where
 
 import Control.Exception.Safe
 import Control.Monad.IO.Class (MonadIO(..)) 
 import Control.Monad.Morph (MFunctor(..), MMonad(..), MonadTrans(..)) 
 
-import Numeric.Dopamine.Agent
-import Numeric.Dopamine.Environment
-import Numeric.Dopamine.Exception (EpisodeCompleted(..))
+import Numeric.Ketamine.Agent
+import Numeric.Ketamine.Environment
+import Numeric.Ketamine.Exception (EpisodeCompleted(..))
 
+--import Pipes.Safe
 import qualified Pipes.Core as P
 
 
@@ -46,6 +47,7 @@ reflectAgent = EnT . P.reflect . unAgT
 
 reflectEnvironment :: Monad m => EnT a o m r -> AgT o a m r
 reflectEnvironment = AgT . P.reflect . unEnT
+
 
 -------------------------------------------------------------------------------
 -- | 

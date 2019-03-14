@@ -1,4 +1,4 @@
-module Numeric.Dopamine.Exception (
+module Numeric.Ketamine.Exception (
     tryAll
   , tryEvaluate
   , EpisodeCompleted(..)

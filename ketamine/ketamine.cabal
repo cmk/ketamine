@@ -1,12 +1,12 @@
 cabal-version: 1.22
 
-name:           dopamine
+name:           ketamine
 version:        0.0.0.1
 synopsis:       Reinforcement Learning in Haskell
 description:    A very approximate port of the Google RL lib.
 category:       reinforcement learning, machine learning, artificial intelligence
-homepage:       https://github.com/cmk/dopamine
-bug-reports:    https://github.com/cmk/dopamine/issues
+homepage:       https://github.com/cmk/ketamine
+bug-reports:    https://github.com/cmk/ketamine/issues
 author:         Chris McKinlay
 maintainer:     Chris McKinlay
 copyright:      2019 Chris McKinlay
@@ -15,16 +15,16 @@ build-type:     Simple
 
 source-repository head
   type: git
-  location: https://github.com/cmk/dopamine
+  location: https://github.com/cmk/ketamine
 
 library
   exposed-modules:
-      Numeric.Dopamine
-      Numeric.Dopamine.Agent
-      Numeric.Dopamine.Environment
-      Numeric.Dopamine.Episode
-      Numeric.Dopamine.Exception
-      Numeric.Dopamine.Outcome
+      Numeric.Ketamine
+      Numeric.Ketamine.Agent
+      Numeric.Ketamine.Environment
+      Numeric.Ketamine.Episode
+      Numeric.Ketamine.Exception
+      Numeric.Ketamine.Outcome
  
   hs-source-dirs:
       src
@@ -32,7 +32,6 @@ library
   ghc-options: -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
   build-depends:
       base >=4.9 && <5.0
-    , conduit
     , data-default
     , exceptions
     , mmorph
@@ -40,10 +39,10 @@ library
     , mtl
     , mwc-random
     , pipes
+    , pipes-safe
     , primitive
     , safe-exceptions
     , transformers
-    , unliftio-core
   default-language: Haskell2010
 
 executable bandits
@@ -52,7 +51,7 @@ executable bandits
       base >=4.9 && <5.0
     , containers
     , dlist
-    , dopamine
+    , ketamine
     , hashable
     , mmorph
     , mtl
@@ -72,7 +71,7 @@ executable main
       base >=4.9 && <5.0
     , containers
     , dlist
-    , dopamine
+    , ketamine
     , hashable
     , mmorph
     , mtl

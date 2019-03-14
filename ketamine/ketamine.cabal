@@ -21,9 +21,19 @@ library
   exposed-modules:
       Numeric.Ketamine
       Numeric.Ketamine.Agent
+      Numeric.Ketamine.Effect.Clock
+      Numeric.Ketamine.Effect.RWS
+      Numeric.Ketamine.Effect.Random
+      Numeric.Ketamine.Effect.Reader
+      Numeric.Ketamine.Effect.Resource
+      Numeric.Ketamine.Effect.State
+      Numeric.Ketamine.Effect.Writer
       Numeric.Ketamine.Environment
       Numeric.Ketamine.Episode
       Numeric.Ketamine.Exception
+      Numeric.Ketamine.Log
+      Numeric.Ketamine.Log.Logfmt
+      Numeric.Ketamine.Log.Types
       Numeric.Ketamine.Outcome
  
   hs-source-dirs:
@@ -32,18 +42,44 @@ library
   ghc-options: -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates
   build-depends:
       base >=4.9 && <5.0
+    , aeson
+    , attoparsec
+    , bytestring
+    , case-insensitive
+    , clock
+    , containers
     , data-default
+    , errors
     , exceptions
+    , fast-logger
+    , lens
     , mmorph
     , monad-loops
     , mtl
+    , murmur-hash
     , mwc-random
     , pipes
     , pipes-safe
     , primitive
+    , profunctors
+    , random-fu
+    , random-source
+    , resourcet
+    , rvar
     , safe-exceptions
+    , scientific
+    , tagged
+    , text
+    , template-haskell
+    , tf-random
     , transformers
+    , transformers-lift
+    , unordered-containers
+    , unix
+    , writer-cps-transformers
+    , time
   default-language: Haskell2010
+
 
 executable bandits
   main-is: bandits.hs

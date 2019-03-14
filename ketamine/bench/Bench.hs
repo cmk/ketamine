@@ -34,7 +34,7 @@ import qualified System.Random.MWC as MWC
 
 -- platform-effect
 
-import qualified Platform.Effect.Random as Platform
+import qualified Numeric.Ketamine.Effect.Random as Platform
 
 main :: IO ()
 main = do
@@ -58,7 +58,7 @@ main = do
             ]
         , steps "int-seeded" iterations $ \n run ->
             [ run "stdgen" $
-                  whnf (\s -> uniformStdGen (Platform.mkStdGen s) n :: Int)
+                  whnf (\s -> uniformStdGen (Numeric.Ketamine.mkStdGen s) n :: Int)
                        42
             , run "tf-random" $
                   whnf (\s -> uniformTFGen (TF.seedTFGen s) n :: Int)
@@ -82,28 +82,28 @@ main = do
             ]
         , steps "takt-uniform" iterations $ \n run ->
             [ run "stdgen" $
-                whnf (taktRandomPure std Platform.StdUniform :: Int -> Int) n
+                whnf (taktRandomPure std Numeric.Ketamine.StdUniform :: Int -> Int) n
             , run "mersenne-pure64" $
-                whnf (taktRandomPure p64 Platform.StdUniform :: Int -> Int) n
+                whnf (taktRandomPure p64 Numeric.Ketamine.StdUniform :: Int -> Int) n
             , run "devurandom" $
-                whnfIO (taktRandom Platform.DevURandom Platform.StdUniform n :: IO Int)
+                whnfIO (taktRandom Numeric.Ketamine.DevURandom Numeric.Ketamine.StdUniform n :: IO Int)
             , run "mwc256" $
-                whnfIO (taktRandom mwc Platform.StdUniform n :: IO Int)
+                whnfIO (taktRandom mwc Numeric.Ketamine.StdUniform n :: IO Int)
             , run "threefish" $
-                whnfIO (taktRandom tf Platform.StdUniform n :: IO Int)
+                whnfIO (taktRandom tf Numeric.Ketamine.StdUniform n :: IO Int)
             ]
 
         , steps "takt-normal" iterations $ \n run ->
             [ run "stdgen" $
-                whnf (taktRandomPure std Platform.StdNormal :: Int -> Double) n
+                whnf (taktRandomPure std Numeric.Ketamine.StdNormal :: Int -> Double) n
             , run "mersenne-pure64" $
-                whnf (taktRandomPure p64 Platform.StdNormal :: Int -> Double) n
+                whnf (taktRandomPure p64 Numeric.Ketamine.StdNormal :: Int -> Double) n
             , run "devurandom" $
-                whnfIO (taktRandom Platform.DevURandom Platform.StdNormal n :: IO Double)
+                whnfIO (taktRandom Numeric.Ketamine.DevURandom Numeric.Ketamine.StdNormal n :: IO Double)
             , run "mwc256" $
-                whnfIO (taktRandom mwc Platform.StdNormal n :: IO Double)
+                whnfIO (taktRandom mwc Numeric.Ketamine.StdNormal n :: IO Double)
             , run "threefish" $
-                whnfIO (taktRandom tf Platform.StdNormal n :: IO Double)
+                whnfIO (taktRandom tf Numeric.Ketamine.StdNormal n :: IO Double)
             ]
         ]
 
@@ -122,26 +122,26 @@ uniformTFGen g = countDownGen g TF.random
 uniformMWC :: (Num a, MWC.Variate a) => MWC.GenIO -> Int -> IO a
 uniformMWC g = countDown (MWC.uniform g)
 
-taktRandomPure :: ( Platform.MonadRandom (Platform.RandomT g Identity)
-                  , Platform.Distribution d a
+taktRandomPure :: ( Numeric.Ketamine.MonadRandom (Numeric.Ketamine.RandomT g Identity)
+                  , Numeric.Ketamine.Distribution d a
                   , Num a
                   )
                => g
                -> d a
                -> Int
                -> a
-taktRandomPure g d = Platform.evalRandom g . countDown (Platform.getRandom d)
+taktRandomPure g d = Numeric.Ketamine.evalRandom g . countDown (Numeric.Ketamine.getRandom d)
 
 taktRandom :: ( Monad m
-              , Platform.MonadRandom (Platform.RandomT g m)
-              , Platform.Distribution d a
+              , Numeric.Ketamine.MonadRandom (Numeric.Ketamine.RandomT g m)
+              , Numeric.Ketamine.Distribution d a
               , Num a
               )
            => g
            -> d a
            -> Int
            -> m a
-taktRandom g d = Platform.evalRandomT g . countDown (Platform.getRandom d)
+taktRandom g d = Numeric.Ketamine.evalRandomT g . countDown (Numeric.Ketamine.getRandom d)
 
 steps :: Show a
       => String

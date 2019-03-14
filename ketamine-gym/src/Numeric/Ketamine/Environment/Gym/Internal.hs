@@ -1,8 +1,8 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs, DeriveFunctor #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, TypeApplications, AllowAmbiguousTypes #-}
+{-# LANGUAGE InstanceSigs, LambdaCase, DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, TypeApplications, MultiParamTypeClasses, OverloadedStrings, TypeFamilies, AllowAmbiguousTypes #-}
 module Numeric.Ketamine.Environment.Gym.Internal where
 
 import Control.Exception.Safe

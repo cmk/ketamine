@@ -31,7 +31,7 @@
 -- level="info" msg="ok tschüss!" moon="full" ns="rpc" pid=65499 prog="<interactive>" loc="interactive:Ghci1:15:13"
 -- level="info" msg="epilogue" pid=65499 prog="<interactive>" loc="interactive:Ghci1:16:5"
 --
-module Numeric.Ketamine.Log (
+module Numeric.Ketamine.Capability.Log (
     Logger
   , HasLogger (..)
   , newLogger
@@ -96,8 +96,8 @@ import           System.Environment (getProgName)
 import           System.Log.FastLogger (defaultBufSize, newStderrLoggerSet, pushLogStrLn, rmLoggerSet)
 import           System.Posix.Process (getProcessID)
 
-import           Numeric.Ketamine.Log.Logfmt (fmtString, formatLogfmt)
-import           Numeric.Ketamine.Log.Types
+import           Numeric.Ketamine.Capability.Log.Logfmt (fmtString, formatLogfmt)
+import           Numeric.Ketamine.Capability.Log.Types
 
 import qualified Control.Exception.Safe as Safe
 

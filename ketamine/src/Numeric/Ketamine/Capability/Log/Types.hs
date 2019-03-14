@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Numeric.Ketamine.Log.Types (
+module Numeric.Ketamine.Capability.Log.Types (
     LogFormat (..)
 
   , Logger

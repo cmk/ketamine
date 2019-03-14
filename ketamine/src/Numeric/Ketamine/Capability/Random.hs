@@ -12,7 +12,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-module Numeric.Ketamine.Effect.Random
+module Numeric.Ketamine.Capability.Random
     (
     -- * MonadRandom
       MonadRandom                       (..)
@@ -122,7 +122,7 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Random.Distribution     (Distribution)
 import Data.RVar                    (RVar, RVarT)
 
-import Numeric.Ketamine.Effect.State           (StateT)
+import Numeric.Ketamine.Capability.State           (StateT)
 
 import qualified Data.Digest.Murmur64 as Murmur
 
@@ -134,9 +134,8 @@ import qualified Data.Random.Source.PureMT    as Pure
 import qualified Data.Random.Source.StdGen    as Std
 import qualified System.Random.TF             as TF
 import qualified System.Random.TF.Instances   as TF
-import qualified Numeric.Ketamine.Effect.Reader           as Reader
-import qualified Numeric.Ketamine.Effect.State            as State
-import qualified Numeric.Ketamine.Effect.Writer           as Writer
+import qualified Numeric.Ketamine.Capability.Reader           as Reader
+import qualified Numeric.Ketamine.Capability.State            as State
 
 import qualified Data.Random.Distribution.Beta                 as Distribution
 import qualified Data.Random.Distribution.Binomial             as Distribution
@@ -216,8 +215,6 @@ newtype RandomT g m a = RandomT { unRandomT :: StateT g m a }
         , MonadPlus
         , MonadIO
         , Reader.LiftLocal
-        , Writer.LiftListen
-        , Writer.LiftPass
         )
 
 -- | Run the monadic computation, returning the computed value and the

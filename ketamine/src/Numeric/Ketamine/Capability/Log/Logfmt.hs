@@ -9,7 +9,7 @@
 -- readability. One of it's advantages over other encodings of structured log
 -- records is that parsers can gracefully handle unstructured output (eg. from
 -- 3rd party software).
-module Numeric.Ketamine.Log.Logfmt (
+module Numeric.Ketamine.Capability.Log.Logfmt (
     formatLogfmt
   , parseLogfmt
   , fmtString
@@ -35,7 +35,7 @@ import           Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.Text.Lazy.Encoding as LTE
 
 
-import           Numeric.Ketamine.Log.Types
+import           Numeric.Ketamine.Capability.Log.Types
 
 
 -- | Format a log record acc. to the \"logfmt\" convention

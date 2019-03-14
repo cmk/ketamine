@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 -- | State effect and handlers.
-module Numeric.Ketamine.Effect.State
+module Numeric.Ketamine.Capability.State
     (
     -- * MonadState
       MonadState   (..)

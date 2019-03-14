@@ -18,7 +18,7 @@
 -- Represents a computation, which can read values from
 -- a shared environment, pass values from function to function,
 -- and execute sub-computations in a modified environment.
-module Numeric.Ketamine.Effect.Reader
+module Numeric.Ketamine.Capability.Reader
     (
     -- * MonadReader
       MonadReader     (..)

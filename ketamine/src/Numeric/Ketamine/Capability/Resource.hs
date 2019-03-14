@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Numeric.Ketamine.Effect.Resource
+module Numeric.Ketamine.Capability.Resource
     ( module Resource
     )
 where

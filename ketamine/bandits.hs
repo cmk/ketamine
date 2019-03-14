@@ -26,10 +26,10 @@ import Data.Ord (comparing)
 import Data.Vector ((!), Vector)
 import Data.IORef
 
-import Numeric.Dopamine.Agent
-import Numeric.Dopamine.Environment 
-import Numeric.Dopamine.Episode
-import qualified Numeric.Dopamine.Outcome as O
+import Numeric.Ketamine.Agent
+import Numeric.Ketamine.Environment 
+import Numeric.Ketamine.Episode
+import qualified Numeric.Ketamine.Outcome as O
 
 import qualified Control.Monad.Trans.Reader as TR
 import qualified Data.DList as D

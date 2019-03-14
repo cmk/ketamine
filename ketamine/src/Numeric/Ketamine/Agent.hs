@@ -16,7 +16,7 @@
 
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-module Numeric.Dopamine.Agent where
+module Numeric.Ketamine.Agent where
 
 import Control.Exception.Safe
 import Control.Monad.IO.Class (MonadIO(..)) 

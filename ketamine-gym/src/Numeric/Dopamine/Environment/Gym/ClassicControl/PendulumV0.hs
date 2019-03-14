@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE InstanceSigs #-}
-module Numeric.Dopamine.Environment.Gym.ClassicControl.PendulumV0 where
+module Numeric.Ketamine.Environment.Gym.ClassicControl.PendulumV0 where
 
 import Control.Monad.IO.Class
 import Control.Exception.Safe

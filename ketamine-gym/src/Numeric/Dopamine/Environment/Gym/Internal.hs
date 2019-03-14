@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs, DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, TypeApplications, AllowAmbiguousTypes #-}
-module Numeric.Dopamine.Environment.Gym.Internal where
+module Numeric.Ketamine.Environment.Gym.Internal where
 
 import Control.Exception.Safe
 import Data.DList
@@ -45,7 +45,7 @@ data Initial o = Initial !o | EmptyEpisode
 class Monad m => MonadMWCRandom m where
   getGen :: m GenIO
 
-
+-- TODO: switch to my random
 -- | in the end, we can always use IO to get our generator, but we will create a
 -- new generator on each use.
 instance MonadMWCRandom IO where

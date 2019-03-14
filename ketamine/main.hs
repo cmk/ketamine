@@ -25,10 +25,10 @@ import Control.Monad.Morph
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
 import Data.IORef
-import Numeric.Dopamine.Agent
-import Numeric.Dopamine.Environment
-import Numeric.Dopamine.Episode
-import Numeric.Dopamine.Exception (EpisodeCompleted(..))
+import Numeric.Ketamine.Agent
+import Numeric.Ketamine.Environment
+import Numeric.Ketamine.Episode
+import Numeric.Ketamine.Exception (EpisodeCompleted(..))
 
 --TODO:  tic tac toe ex
 

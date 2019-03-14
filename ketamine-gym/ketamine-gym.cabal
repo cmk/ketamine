@@ -1,12 +1,12 @@
 cabal-version: 1.22
 
-name:           dopamine-gym
+name:           ketamine-gym
 version:        0.0.0.1
 synopsis:       Reinforcement Learning in Haskell
 description:    A very approximate port of the Google RL lib.
 category:       reinforcement learning, machine learning, artificial intelligence
-homepage:       https://github.com/cmk/dopamine
-bug-reports:    https://github.com/cmk/dopamine/issues
+homepage:       https://github.com/cmk/ketamine
+bug-reports:    https://github.com/cmk/ketamine/issues
 author:         Chris McKinlay
 maintainer:     Chris McKinlay
 copyright:      2019 Chris McKinlay
@@ -15,12 +15,12 @@ build-type:     Simple
 
 source-repository head
   type: git
-  location: https://github.com/cmk/dopamine
+  location: https://github.com/cmk/ketamine
 
 library
   exposed-modules:
-      Numeric.Dopamine.Environment.Gym.Internal
-      Numeric.Dopamine.Environment.Gym.ClassicControl.PendulumV0
+      Numeric.Ketamine.Environment.Gym.Internal
+      Numeric.Ketamine.Environment.Gym.ClassicControl.PendulumV0
   hs-source-dirs:
       src
   default-extensions: MultiParamTypeClasses OverloadedStrings LambdaCase TypeFamilies
@@ -29,7 +29,7 @@ library
       aeson >=1.0
     , base >=4.9 && <5.0
     , dlist
-    , dopamine
+    , ketamine
     , gym-http-api >=0.1.0.1
     , hashable
     , http-client >=0.4

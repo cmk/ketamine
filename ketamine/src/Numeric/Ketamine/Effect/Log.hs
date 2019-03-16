@@ -149,8 +149,8 @@ noLogger =
 -- Adds the current process' name and PID to the 'LogContext'. Log
 -- output is buffered and goes to @stderr@.
 withStdLogger :: (MonadIO m, MonadMask m) => LogLevel -> (Logger -> m a) -> m a
-withStdLogger sev f =
-  let
+withStdLogger sev f = Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+  where
     stdLogger = do
       io <- newStderrLoggerSet defaultBufSize
       prog <- Process <$> getProgName
@@ -161,33 +161,28 @@ withStdLogger sev f =
         out = pushLogStrLn io
 
       pure (newLogger sev ctx fmt (liftIO . out), rmLoggerSet io)
-  in
-    Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+    
 
 -- | Very minimal logger. Doesn't print much except errors.
 --
 -- 'LogContext'. Log output is buffered and goes to @stderr@.
 withMinimalLogger :: (MonadIO m, MonadMask m) => LogLevel -> (Logger -> m a) -> m a
-withMinimalLogger sev f =
-  let
+withMinimalLogger sev f = Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+  where
     stdLogger = do
-      io <- newStderrLoggerSet defaultBufSize
-      let
-        fmt = LogFormat (\_ _ _ msg -> fmtString msg)
-        out = pushLogStrLn io
+        io <- newStderrLoggerSet defaultBufSize
+        let
+          fmt = LogFormat (\_ _ _ msg -> fmtString msg)
+          out = pushLogStrLn io
 
-      pure (newLogger sev mempty fmt (liftIO . out), rmLoggerSet io)
-  in
-    Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+        pure (newLogger sev mempty fmt (liftIO . out), rmLoggerSet io)
+    
 
 runStdLogging :: (MonadIO m, MonadMask m) => ReaderT Logger m a -> m a
-runStdLogging ma =
-  withStdLogger Info $
-    flip runLogging ma
+runStdLogging ma = withStdLogger Info $ flip runLogging ma
 
 runLogging :: r -> ReaderT r m a -> m a
-runLogging =
-  flip runReaderT
+runLogging = flip runReaderT
 
 debug ::
      HasLogger r Logger

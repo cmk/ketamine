@@ -27,6 +27,7 @@ library
       Numeric.Ketamine.Effect.Log.Logfmt
       Numeric.Ketamine.Effect.Log.Types
       Numeric.Ketamine.Effect.Random
+      Numeric.Ketamine.Effect.Ref
       Numeric.Ketamine.Effect.Resource
       Numeric.Ketamine.Effect.State
       Numeric.Ketamine.Environment

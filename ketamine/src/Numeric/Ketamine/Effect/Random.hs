@@ -13,12 +13,13 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
+ {-# OPTIONS_GHC -w #-}
 module Numeric.Ketamine.Effect.Random
     (
-    -- * HasRandom
-      HasRandom                       (..)
-    --, getRandom
-
+    -- * HasRVar
+      HasRVar                       (..)
+    , getRandom
+    , tfRandom
 
 
     -- ** Sources
@@ -27,7 +28,7 @@ module Numeric.Ketamine.Effect.Random
     , Std.mkStdGen
     , Std.newStdGen
 
-    -- *** \/dev\/random
+    -- *** \/dev\/rvar
     , Dev.DevRandom                     (..)
 
     -- *** MWC256
@@ -86,7 +87,7 @@ module Numeric.Ketamine.Effect.Random
     , Distribution.Ziggurat             (..)
 
     -- *** Distribution Class
-    , Distribution                      (..)
+    --, Distribution                      (..)
 
     -- ** RVar
     , RVar
@@ -95,16 +96,21 @@ module Numeric.Ketamine.Effect.Random
     -- ** Helpers
     , categorize
     , priorProb
+    , runSeeded
     --, sampleSeeded
     ) where
 
 import Control.Applicative          (Alternative)
+import Control.Lens (Lens', lens, view)
 import Control.Monad                (MonadPlus)
 import Control.Monad.Fail           (MonadFail)
 import Control.Monad.Fix            (MonadFix)
 import Control.Monad.IO.Class       (MonadIO, liftIO)
 import Control.Monad.Primitive      (PrimMonad, PrimState, RealWorld,
                                      primToPrim)
+import Control.Monad.Reader (MonadReader)
+import Control.Monad.State (MonadState)
+
 import Control.Monad.ST             (ST)
 import Control.Monad.Trans.Class    (MonadTrans (lift))
 import Control.Monad.Trans.Lift.StT (StT)
@@ -115,11 +121,11 @@ import qualified Data.List.NonEmpty as NonEmpty
 import Data.Random.Distribution     (Distribution)
 import Data.RVar                    (RVar, RVarT)
 
---import Control.Monad.Trans.State           (StateT)
-
+import System.Random.TF.Gen (RandomGen(..))
+import System.Random.TF.Instances (Random)
 
 import qualified Control.Monad.Trans.Reader  as Reader
-import qualified Control.Monad.State.Class    as State
+import qualified Control.Monad.State   as State
 --import qualified Control.Monad.Trans.State    as State
 
 import qualified Data.Digest.Murmur64 as Murmur
@@ -132,6 +138,8 @@ import qualified Data.Random.Source.PureMT    as Pure
 import qualified Data.Random.Source.StdGen    as Std
 import qualified System.Random.TF             as TF
 import qualified System.Random.TF.Instances   as TF
+import qualified System.Random.MWC as MWC
+
 
 import qualified Data.Random.Distribution.Beta                 as Distribution
 import qualified Data.Random.Distribution.Binomial             as Distribution
@@ -156,22 +164,70 @@ import qualified Data.Random.Distribution.Ziggurat             as Distribution
 
 -- FIXME: document and re-export Distributions, common types, etc.
 
-class HasRandom a env | env -> a where
-    random :: env -> RVar a
+class HasGen s e | e -> s where
+    gen :: Lens' e (MWC.Gen s)
 
+instance HasGen s (MWC.Gen s) where
+    gen = id
+    {-# INLINE gen #-}
 
-instance HasRandom a (RVar a) where
-    random = id
-    {-# INLINE random #-}
+class HasRVar r e | e -> r where
+    rvar :: Lens' e (RVar r)
 
-    
-{-
+instance HasRVar r (RVar r) where
+    rvar = id
+    {-# INLINE rvar #-}
+
 -- TODO: add notes about composition of variates, summing, etc. and
 -- the purpose of 'RVar'.
-getRandom :: (HasRandom m, Distribution d a) => d a -> m a
-getRandom = random . Random.rvar
-{-# INLINE getRandom #-}
+getRandom 
+  :: forall (m :: * -> *) r s. ()
+  => Distribution (RVarT Identity) r
+  => MonadReader s m
+  => HasRVar r s
+  => m (RVar r)
+-- getRandom :: (Env (d r) e, MonadReader e m, Distribution d r) => m r
+getRandom = Random.rvar <$> view rvar
+
+
+tfRandom
+  :: (MonadState s m, Random b, RandomGen s) => m b
+tfRandom =  do
+    g <- State.get
+    let (x, g') = TF.random g
+    State.put $! g'
+    return x
+{-# INLINE tfRandom #-}
+
+
+
+
+{-
+foo :: forall b s1 s2 (t :: (* -> *) -> * -> *) (m :: * -> *) (d :: * -> *).
+               (MonadReader s1 (t m), HasRef s2 s1, MonadTrans t,
+                Control.Monad.Primitive.PrimBase m, Distribution d b,
+                Source.RandomSource m (SomeRef s2), PrimMonad m) => d b -> t m b       
+foo v = view ref >>= lift . primToPrim . flip Random.sampleFrom v
+
+bar :: forall b s1 s2 (t :: (* -> *) -> * -> *) (m :: * -> *) (d :: * -> *).
+               (MonadReader s1 (t m), HasRef s2 s1, MonadTrans t,
+                Distribution d b, Source.RandomSource m (SomeRef s2)) => d b -> t m b
+bar v = view ref >>= lift . flip Random.sampleFrom v
 -}
+
+-- | Run a random effect, seeded from the given hash.  Allows us to run
+--
+-- The `Hash64` seed can be constructed from an input source using 'hash64'.
+--runSeededRandom :: HasRef TF.TFGen e => Murmur.Hash64 -> Keta TF.TFGen a -> IO a
+runSeeded :: Murmur.Hash64 -> TF.TFGen
+runSeeded h = TF.seedTFGen (0, 0, 0, Murmur.asWord64 h)
+
+
+--runSeededRandom :: Monad m => Murmur.Hash64 -> RandomT TF.TFGen m a -> m a
+--runSeededRandom h = evalRandomT $ TF.seedTFGen (0, 0, 0, Murmur.asWord64 h)
+
+--sampleSeeded :: (Monad m, Distribution d t) => Murmur.Hash64 -> d t -> m t
+--sampleSeeded s = runSeededRandom s . liftRVar . Random.rvar
 
 
 -- * Discrete uniform distribution

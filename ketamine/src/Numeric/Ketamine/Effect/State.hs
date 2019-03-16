@@ -2,116 +2,84 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveFunctor, RankNTypes #-}
+{-# LANGUAGE TemplateHaskell            #-}
 
+ {-# OPTIONS_GHC -w #-}
 -- | State effect and handlers.
 module Numeric.Ketamine.Effect.State where
 
-
+import Control.Monad (ap)
 import Control.Lens.Getter       (Getting)
 import Control.Lens.Setter       (ASetter)
 import Control.Monad.Trans.Class (MonadTrans (lift))
-import Control.Lens (Lens',lens)
+import Control.Lens (Lens', lens, view)
 import qualified Control.Lens as Lens
 
+import Control.Monad.Reader (MonadReader(..))
 import Control.Monad.Primitive      (PrimMonad, PrimState, RealWorld)
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.State.Class    (MonadState(..))
 import           Control.Monad.Primitive  (PrimMonad (..))
-import           Data.Vector.Unboxed.Mutable (Unbox)
-import qualified Data.Vector.Unboxed.Mutable as MUVector
-import UnliftIO
--- | Environment values with stateful capabilities to SomeRef
---
-class HasStateRef s env | env -> s where
-    stateRefL :: Lens' env (SomeRef s)
+import qualified Data.Random.Source           as Source
+import Control.Monad.ST
+import Control.Monad.Primitive
 
--- | Identity state reference where the SomeRef is the env
---
-instance HasStateRef a (SomeRef a) where
-    stateRefL = lens id (\_ x -> x)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Data.STRef
 
--- | Abstraction over how to read from and write to a mutable reference
---
-data SomeRef a = SomeRef !(IO a) !(a -> IO ())
+import Numeric.Ketamine.Effect.Random
 
--- | Read from a SomeRef
---
-readSomeRef :: MonadIO m => SomeRef a -> m a
-readSomeRef (SomeRef x _) = liftIO x
+newtype StateST s a = StateST  { unStateST :: forall r. ReaderT (STRef r s) (ST r) a }
+  deriving Functor
 
--- | Write to a SomeRef
---
-writeSomeRef :: MonadIO m => SomeRef a -> a -> m ()
-writeSomeRef (SomeRef _ x) = liftIO . x
+runStateST :: StateST s a -> s -> (a,s)
+runStateST st s0 = runST $ do
+    r <- newSTRef s0
+    a <- runReaderT (unStateST st) r
+    s <- readSTRef r
+    return (a,s)
 
--- | Modify a SomeRef
--- This function is subject to change due to the lack of atomic operations
---
-modifySomeRef :: MonadIO m => SomeRef a -> (a -> a) -> m ()
-modifySomeRef (SomeRef read' write) f =
-    liftIO $ (f <$> read') >>= write
-
-ioRefToSomeRef :: IORef a -> SomeRef a
-ioRefToSomeRef ref = do
-    SomeRef (readIORef ref)
-            (\val -> modifyIORef' ref (\_ -> val))
-
-uRefToSomeRef :: Unbox a => Ref RealWorld a -> SomeRef a
-uRefToSomeRef ref = do
-    SomeRef (readRef ref) (writeRef ref)
-
--- | create a new boxed SomeRef
---
-newSomeRef :: MonadIO m => a -> m (SomeRef a)
-newSomeRef a = do
-    ioRefToSomeRef <$> newIORef a
-
--- | create a new unboxed SomeRef
---
-newUnboxedSomeRef :: (MonadIO m, Unbox a) => a -> m (SomeRef a)
-newUnboxedSomeRef a =
-    uRefToSomeRef <$> (liftIO $ newRef a)
+evalStateST :: StateST s a -> s -> a
+evalStateST st s0 = fst $ runStateST st s0
 
 
--- | An unboxed reference. This works like an 'IORef', but the data is
--- stored in a bytearray instead of a heap object, avoiding
--- significant allocation overhead in some cases. For a concrete
--- example, see this Stack Overflow question:
--- <https://stackoverflow.com/questions/27261813/why-is-my-little-stref-int-require-allocating-gigabytes>.
---
--- The first parameter is the state token type, the same as would be
--- used for the 'ST' monad. If you're using an 'IO'-based monad, you
--- can use the convenience 'IORef' type synonym instead.
---
-newtype Ref s a = Ref (MUVector.MVector s a)
+instance Applicative (StateST s) where
+    pure = return
+    (<*>) = ap
 
--- | Helpful type synonym for using a 'Ref' from an 'IO'-based stack.
---
---type IORef = Ref (PrimState IO)
+instance Monad (StateST s) where
+    return a = StateST (return a)
+    m >>= f  = StateST (unStateST m >>= unStateST . f)
 
--- | Create a new 'Ref'
---
-newRef :: (PrimMonad m, Unbox a) => a -> m (Ref (PrimState m) a)
-newRef a = fmap Ref (MUVector.replicate 1 a)
+instance MonadState s (StateST s) where
+    get   = StateST $ ask >>= lift . readSTRef
+    put x = StateST $ ask >>= \s -> lift (writeSTRef s x)
 
--- | Read the value in a 'Ref'
---
-readRef :: (PrimMonad m, Unbox a) => Ref (PrimState m) a -> m a
-readRef (Ref v) = MUVector.unsafeRead v 0
+{-
+instance MonadReader s (StateST s) where
+    ask   = StateST $ ask >>= lift . readSTRef
+    local f s = undefined -- StateST $ ask >>= lift . readSTRef
+-}
 
--- | Write a value into a 'Ref'. Note that this action is strict, and
--- will force evalution of the value.
---
-writeRef :: (PrimMonad m, Unbox a) => Ref (PrimState m) a -> a -> m ()
-writeRef (Ref v) = MUVector.unsafeWrite v 0
+-- Generate a random-fu MonadRandom instance for tf-random.
+-- Note that `getRandomDouble` will be generated automatically from
+-- `getRandomWord64` by the TemplateHaskell.  (tf-random doesn't provide
+-- a concrete instance itself.)
+Source.monadRandom [d|
+    instance Source.MonadRandom (StateST TFGen) where
+        getRandomWord8 = tfRandom
+        getRandomWord16 = tfRandom
+        getRandomWord32 = tfRandom
+        getRandomWord64 = tfRandom
+    |]
 
--- | Modify a value in a 'Ref'. Note that this action is strict, and
--- will force evaluation of the result value.
---
-modifyRef :: (PrimMonad m, Unbox a) => Ref (PrimState m) a -> (a -> a) -> m ()
-modifyRef u f = readRef u >>= writeRef u . f
+--runSeededRandom :: Monad m => Murmur.Hash64 -> RandomT TF.TFGen m a -> m a
+--runSeededRandom h = evalRandomT $ TF.seedTFGen (0, 0, 0, Murmur.asWord64 h)
 
-
+runSeededST :: Hash64 -> StateST TFGen a -> a
+runSeededST h st = evalStateST st $ runSeeded h
 
 -- | Monadic state transformer.
 --

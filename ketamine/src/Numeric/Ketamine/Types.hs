@@ -24,6 +24,8 @@ import Numeric.Ketamine.Effect.Random
 import qualified System.Random.TF             as TF
 import qualified System.Random.TF.Instances   as TF
 
+
+
 -- | The Reader+IO monad. This is different from a 'ReaderT' because:
 --
 -- * It's not a transformer, it hardcodes IO for simpler usage and

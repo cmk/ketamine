@@ -12,7 +12,7 @@
 -- >>> :set -XTypeApplications
 -- >>> :m Platform.Effect Platform.Log Data.Text
 -- >>> :{
--- runLoggingT . flip evalStateT (0 :: Int) $ do
+-- runStdLogging . flip evalStateT (0 :: Int) $ do
 --     infoT "been here"
 --     modify (+ (1 :: Int))
 --     withContext (Namespace "banana") $ do
@@ -31,7 +31,7 @@
 -- level="info" msg="ok tschüss!" moon="full" ns="rpc" pid=65499 prog="<interactive>" loc="interactive:Ghci1:15:13"
 -- level="info" msg="epilogue" pid=65499 prog="<interactive>" loc="interactive:Ghci1:16:5"
 --
-module Numeric.Ketamine.Capability.Log (
+module Numeric.Ketamine.Effect.Log (
     Logger
   , HasLogger (..)
   , newLogger
@@ -66,7 +66,7 @@ module Numeric.Ketamine.Capability.Log (
 
   , LogFormat (..)
 
-  , Severity (..)
+  , LogLevel (..)
 
   , LogRecordT
   , LogRecord (..)
@@ -96,21 +96,21 @@ import           System.Environment (getProgName)
 import           System.Log.FastLogger (defaultBufSize, newStderrLoggerSet, pushLogStrLn, rmLoggerSet)
 import           System.Posix.Process (getProcessID)
 
-import           Numeric.Ketamine.Capability.Log.Logfmt (fmtString, formatLogfmt)
-import           Numeric.Ketamine.Capability.Log.Types
+import           Numeric.Ketamine.Effect.Log.Logfmt (fmtString, formatLogfmt)
+import           Numeric.Ketamine.Effect.Log.Types
 
 import qualified Control.Exception.Safe as Safe
 
 
 -- | Fully customisable function for logging. Useful for when the caller has
---   been keeping track of lower level details such as 'Severity' and 'Loc'.
+--   been keeping track of lower level details such as 'LogLevel' and 'Loc'.
 --   Prefer the use of 'debug', 'info' and 'err' over this in general.
 recordLog ::
      HasLogger r Logger
   => MonadReader r m
   => MonadIO m
   => IsLogStr msg
-  => Severity
+  => LogLevel
   -> Maybe Loc
   -> msg
   -> m ()
@@ -126,7 +126,7 @@ recordLog sev loc msg = do
 
 ------------------------------------------------------------------------------
 
--- | Takes a 'LogRecord' and records the message with 'Severity' and 'Loc',
+-- | Takes a 'LogRecord' and records the message with 'LogLevel' and 'Loc',
 --   within the 'LogContext' using 'recordLog' and 'inContext'.
 logRecord ::
      HasLogger r Logger
@@ -148,7 +148,7 @@ noLogger =
 --
 -- Adds the current process' name and PID to the 'LogContext'. Log
 -- output is buffered and goes to @stderr@.
-withStdLogger :: (MonadIO m, MonadMask m) => Severity -> (Logger -> m a) -> m a
+withStdLogger :: (MonadIO m, MonadMask m) => LogLevel -> (Logger -> m a) -> m a
 withStdLogger sev f =
   let
     stdLogger = do
@@ -167,7 +167,7 @@ withStdLogger sev f =
 -- | Very minimal logger. Doesn't print much except errors.
 --
 -- 'LogContext'. Log output is buffered and goes to @stderr@.
-withMinimalLogger :: (MonadIO m, MonadMask m) => Severity -> (Logger -> m a) -> m a
+withMinimalLogger :: (MonadIO m, MonadMask m) => LogLevel -> (Logger -> m a) -> m a
 withMinimalLogger sev f =
   let
     stdLogger = do
@@ -283,7 +283,7 @@ inContext =
   flip withContext
 
 -- | Adjust the log level for the given monadic action
-setLevel :: (HasLogger r Logger, MonadReader r m) => Severity -> m a -> m a
+setLevel :: (HasLogger r Logger, MonadReader r m) => LogLevel -> m a -> m a
 setLevel =
   local . set (logger . loggerLevel)
 

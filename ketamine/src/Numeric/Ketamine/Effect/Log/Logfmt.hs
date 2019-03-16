@@ -2,14 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
--- | Formatting of log records acc. to <logfmt http://brandur.org/logfmt>
---
--- This format enjoys popularity among Golang users as well as log aggregation
--- SaaS providers, as it strikes a balance between human and machine
--- readability. One of it's advantages over other encodings of structured log
--- records is that parsers can gracefully handle unstructured output (eg. from
--- 3rd party software).
-module Numeric.Ketamine.Capability.Log.Logfmt (
+module Numeric.Ketamine.Effect.Log.Logfmt (
     formatLogfmt
   , parseLogfmt
   , fmtString
@@ -35,10 +28,12 @@ import           Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.Text.Lazy.Encoding as LTE
 
 
-import           Numeric.Ketamine.Capability.Log.Types
+import           Numeric.Ketamine.Effect.Log.Types
 
 
--- | Format a log record acc. to the \"logfmt\" convention
+-- | Format a log record acc. to the \"logfmt\" convention.
+--
+-- See <logfmt http://brandur.org/logfmt> for more info on logfmt.
 --
 -- Encoding is slightly more robust / parser-friendly than other implementations
 -- in that:
@@ -51,18 +46,18 @@ import           Numeric.Ketamine.Capability.Log.Types
 -- resolved by prefixing with \"field.\".
 formatLogfmt ::
      IsLogStr msg
-  => Severity
+  => LogLevel
   -> Maybe Loc
   -> LogContext
   -> msg
   -> LogStr
-formatLogfmt sev loc ctx msg =
-  let
+formatLogfmt sev loc ctx msg = m
+  where
     possibly logstr
       | logStrLength logstr > 0 = logstr <> space
       | otherwise               = mempty
-  in
-    mconcat [
+
+    m = mconcat [
         fmtSev sev
       , space
       , fmtMsg msg
@@ -80,8 +75,8 @@ formatLogfmt sev loc ctx msg =
 -- Right [Left "Banana pie",Right ("level",StringV "info"),Left "trailing garbage"]
 --
 parseLogfmt :: Parser [Either ByteString LogField]
-parseLogfmt =
-  let
+parseLogfmt = catlefts <$> (kv <|> garbage) `P.sepBy` P.char ' '
+  where
     garbage =
       Left <$> P.takeWhile1 (/= ' ')
     kv =
@@ -108,14 +103,11 @@ parseLogfmt =
         go (Right h) (Left  g, acc) = (Right h, Right h:Left g:acc)
         go (Left  g) (Right _, acc) = (Left  g, acc)
         go (Right h) (Right _, acc) = (Right h, Right h:acc)
-
-  in
-    catlefts <$> (kv <|> garbage) `P.sepBy` P.char ' '
-
+    
 
 ------------------------------------------------------------------------------
 
-fmtSev :: Severity -> LogStr
+fmtSev :: LogLevel -> LogStr
 fmtSev =
   pair "level" . quote . severityToLogStr
 

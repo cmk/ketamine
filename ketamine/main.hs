@@ -9,15 +9,16 @@
              TypeFamilies, 
              DeriveFunctor, 
              DeriveGeneric,
+             OverloadedStrings,
              Rank2Types,
              ScopedTypeVariables,
              StandaloneDeriving,
+             TemplateHaskell,
              TypeApplications
 #-}
 
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-import Control.Applicative (Alternative(..),liftA2)
 import Control.Exception.Safe 
 import Control.Monad
 import Control.Monad.IO.Class
@@ -28,11 +29,60 @@ import Data.IORef
 import Numeric.Ketamine.Agent
 import Numeric.Ketamine.Environment
 import Numeric.Ketamine.Episode
-import Numeric.Ketamine.Exception (EpisodeCompleted(..))
+import Numeric.Ketamine.Effect.Exception (EpisodeCompleted(..))
+import qualified Numeric.Ketamine.Effect.Log as L
+
+import           Control.Lens (Lens', (^.), makeLenses, to)
+--import           Control.Lens
+import qualified Control.Monad.Reader as MTL
+import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad (void)
+
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Foldable
+import           Data.Text (Text)
+import qualified Data.Text as Text
+import           Data.Text.Encoding (encodeUtf8)
+
+import           Text.Printf (printf, PrintfArg(..))
 
 --TODO:  tic tac toe ex
 
-main = test2
+
+
+data TestCapabilities = TestCaps
+    { _testlogger :: !L.Logger
+    }
+makeLenses ''TestCapabilities
+
+instance L.HasLogger TestCapabilities L.Logger where
+  logger = testlogger
+
+-- Log the configuration.
+info :: (MTL.MonadIO m, L.HasLogger r L.Logger) => r -> Text -> m ()
+info caps msg = void . flip MTL.runReaderT caps $ L.infoT msg
+
+
+getPath
+  :: (MonadIO m, L.HasLogger r L.Logger) =>
+     r -> Text -> m ()
+getPath caps path = info caps . Text.pack $ printf "path is: %s" path
+
+logPath
+  :: (L.HasLogger r L.Logger, MTL.MonadReader r m, MonadIO m) =>
+     Text -> m ()
+logPath path = L.infoT . Text.pack $ printf "path is: %s" path
+
+foo :: (MonadIO m, MonadMask m) => ReaderT TestCapabilities m a -> m a
+foo k = L.withStdLogger L.Info $ \l ->
+  let 
+    caps = TestCaps l
+
+  in MTL.runReaderT k caps
+
+bar :: IO ()
+bar = foo (logPath "/yo/bitch")
+
 
 -- TODO move to readme / put in lhs file
 -- TODO give example using ether
@@ -102,7 +152,7 @@ test2 = do
 -}
 
 
-
+main = test2
 
 
 

@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Numeric.Ketamine.Capability.Log.Types (
+module Numeric.Ketamine.Effect.Log.Types (
     LogFormat (..)
 
   , Logger
@@ -17,7 +17,7 @@ module Numeric.Ketamine.Capability.Log.Types (
   , loggerFmt
   , loggerOut
 
-  , Severity (..)
+  , LogLevel (..)
   , severityToLogStr
 
   , LogRecordT
@@ -76,35 +76,34 @@ import           Language.Haskell.TH.Syntax (Loc (..))
 import           System.Log.FastLogger (LogStr, ToLogStr (..), logStrLength)
 import           System.Posix.Types (CPid (..), ProcessID)
 
-data Severity =
+data LogLevel =
     Debug
   -- ^ Tracing of local execution.
   | Info
   -- ^ Anything providing context for troubleshooting
   | Err
   -- ^ Error conditions
+  | Warn
+  -- ^ Unsafe conditions
     deriving (Eq, Show, Ord, Enum, Bounded)
 
 
-renderSeverity :: Severity -> Text
-renderSeverity severity =
+renderLogLevel :: LogLevel -> Text
+renderLogLevel severity =
   case severity of
-    Debug ->
-      "debug"
-    Info ->
-      "info"
-    Err ->
-      "err"
+    Debug -> "debug"
+    Info -> "info"
+    Err -> "err"
 
 
 newtype LogFormat =
   LogFormat {
-      runLogFormat :: forall msg. IsLogStr msg => Severity -> Maybe Loc -> LogContext -> msg -> LogStr
+      runLogFormat :: forall msg. IsLogStr msg => LogLevel -> Maybe Loc -> LogContext -> msg -> LogStr
     }
 
 data Logger =
   Logger {
-      _loggerLevel :: !Severity
+      _loggerLevel :: !LogLevel
     , _loggerContext :: !LogContext
     , _loggerFmt :: !LogFormat
     , _loggerOut :: LogStr -> IO ()
@@ -118,7 +117,7 @@ instance HasLogger Logger Logger where
   {-# INLINE logger #-}
 
 newLogger ::
-     Severity
+     LogLevel
   -> LogContext
   -> LogFormat
   -> (LogStr -> IO ())
@@ -126,9 +125,9 @@ newLogger ::
 newLogger =
   Logger
 
-severityToLogStr :: Severity -> LogStr
+severityToLogStr :: LogLevel -> LogStr
 severityToLogStr =
-  fromString . T.unpack . renderSeverity
+  fromString . T.unpack . renderLogLevel
 
 ------------------------------------------------------------------------------
 
@@ -138,7 +137,7 @@ type LogRecordT = LogRecord Text
 ------------------------------------------------------------------------------
 
 -- | Data type for keeping track of log records in a pure context
-data LogRecord m = LogRecord LogContext Severity (Maybe Loc) m
+data LogRecord m = LogRecord LogContext LogLevel (Maybe Loc) m
 
 ------------------------------------------------------------------------------
 

@@ -21,18 +21,18 @@ library
   exposed-modules:
       Numeric.Ketamine
       Numeric.Ketamine.Agent
-      Numeric.Ketamine.Capability.Clock
-      Numeric.Ketamine.Capability.Log
-      Numeric.Ketamine.Capability.Log.Logfmt
-      Numeric.Ketamine.Capability.Log.Types
-      Numeric.Ketamine.Capability.Random
-      Numeric.Ketamine.Capability.Reader
-      Numeric.Ketamine.Capability.Resource
-      Numeric.Ketamine.Capability.State
+      Numeric.Ketamine.Effect.Clock
+      Numeric.Ketamine.Effect.Exception
+      Numeric.Ketamine.Effect.Log
+      Numeric.Ketamine.Effect.Log.Logfmt
+      Numeric.Ketamine.Effect.Log.Types
+      Numeric.Ketamine.Effect.Random
+      Numeric.Ketamine.Effect.Resource
+      Numeric.Ketamine.Effect.State
       Numeric.Ketamine.Environment
       Numeric.Ketamine.Episode
-      Numeric.Ketamine.Exception
       Numeric.Ketamine.Outcome
+      Numeric.Ketamine.Types
  
   hs-source-dirs:
       src
@@ -73,8 +73,11 @@ library
     , transformers
     , transformers-lift
     , unordered-containers
+    , unliftio
+    , unliftio-core
     , unix
     , writer-cps-transformers
+    , vector
     , time
   default-language: Haskell2010
 
@@ -103,10 +106,12 @@ executable main
   main-is: main.hs
   build-depends:
       base >=4.9 && <5.0
+    , bytestring
     , containers
     , dlist
     , ketamine
     , hashable
+    , lens
     , mmorph
     , mtl
     , monad-loops
@@ -115,6 +120,7 @@ executable main
     , safe-exceptions
     , statistics
     , transformers
+    , text
     , vector
   default-extensions:
       LambdaCase

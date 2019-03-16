@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Numeric.Ketamine.Capability.Clock
+module Numeric.Ketamine.Effect.Clock
     (
     -- * MonadClock
       MonadClock (getPOSIXTime)

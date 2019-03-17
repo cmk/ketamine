@@ -26,6 +26,10 @@ import qualified System.Random.TF.Instances   as TF
 
 
 
+class Conf a e | e -> a where conf :: Lens' e a
+
+
+{-
 -- | The Reader+IO monad. This is different from a 'ReaderT' because:
 --
 -- * It's not a transformer, it hardcodes IO for simpler usage and
@@ -53,7 +57,7 @@ instance MonadUnliftIO (Keta e) where
 instance PrimMonad (Keta e) where
     type PrimState (Keta e) = PrimState IO
     primitive = Keta . ReaderT . const . primitive
-
+-}
 {-
 newtype KetaST e a = Keta { unKeta :: ReaderT e ST a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader e, MonadThrow)

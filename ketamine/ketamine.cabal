@@ -51,10 +51,8 @@ library
     , errors
     , exceptions
     , fast-logger
-    , lens
     , mmorph
     , microlens
-    , microlens-mtl
     , microlens-th
     , monad-loops
     , mtl
@@ -80,7 +78,6 @@ library
     , unliftio
     , unliftio-core
     , unix
-    , writer-cps-transformers
     , vector
     , time
   default-language: Haskell2010
@@ -115,7 +112,7 @@ executable main
     , dlist
     , ketamine
     , hashable
-    , lens
+    , microlens-th
     , mmorph
     , mtl
     , monad-loops

@@ -32,14 +32,6 @@ import Lens.Micro as Export
 import Lens.Micro.Type as Export
 import Lens.Micro.Internal
 
-import Numeric.Ketamine.Effect.State
-import Numeric.Ketamine.Effect.Random
-
-import qualified System.Random.TF             as TF
-import qualified System.Random.TF.Instances   as TF
-
-
-
 class Conf a e | e -> a where conf :: Lens' e a
 
 {- |

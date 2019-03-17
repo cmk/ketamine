@@ -101,7 +101,6 @@ module Numeric.Ketamine.Effect.Random
     ) where
 
 import Control.Applicative          (Alternative)
-import Control.Lens (Lens', lens, view)
 import Control.Monad                (MonadPlus)
 import Control.Monad.Fail           (MonadFail)
 import Control.Monad.Fix            (MonadFix)
@@ -123,6 +122,8 @@ import Data.RVar                    (RVar, RVarT)
 
 import System.Random.TF.Gen (RandomGen(..))
 import System.Random.TF.Instances (Random)
+
+import Numeric.Ketamine.Types
 
 import qualified Control.Monad.Trans.Reader  as Reader
 import qualified Control.Monad.State   as State

@@ -32,8 +32,7 @@ import Numeric.Ketamine.Episode
 import Numeric.Ketamine.Effect.Exception (EpisodeCompleted(..))
 import qualified Numeric.Ketamine.Effect.Log as L
 
-import           Control.Lens (Lens', (^.), makeLenses, to)
---import           Control.Lens
+--import           Control.Lens (Lens', (^.), makeLenses, to)
 import qualified Control.Monad.Reader as MTL
 import           Control.Monad.Trans.Except (runExceptT)
 import           Control.Monad (void)
@@ -43,9 +42,10 @@ import           Data.Foldable
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding (encodeUtf8)
-
+import           Lens.Micro.TH (makeLenses)
 import           Text.Printf (printf, PrintfArg(..))
 
+import Numeric.Ketamine.Types
 --TODO:  tic tac toe ex
 
 

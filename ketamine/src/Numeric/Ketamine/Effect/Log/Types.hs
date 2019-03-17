@@ -51,7 +51,6 @@ module Numeric.Ketamine.Effect.Log.Types (
 import Control.Applicative
 import           Control.Concurrent (ThreadId)
 import           Control.Exception (SomeException)
---import           Control.Lens (Lens', makeLenses)
 import Lens.Micro (Lens')
 import Lens.Micro.TH (makeLenses)
 import Data.Bifunctor

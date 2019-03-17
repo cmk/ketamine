@@ -12,34 +12,17 @@ module Numeric.Ketamine.Effect.Ref where
 
 
 import Numeric.Ketamine.Types
---import Control.Lens (Lens', lens, view, iview)
---import Control.Lens.At (At(..), Index, IxValue)
 import Control.Applicative (Const(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Reader (MonadReader(..))
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Data.Void (Void)
---import UnliftIO
 import Data.Functor.Identity
-
---import qualified Control.Lens as Lens
---import qualified Control.Lens as L
---import qualified Control.Lens.Internal.Bazaar as L
---import qualified Control.Lens.Internal.Context as L
-
---import Control.Lens.Type
---import Control.Lens.Internal.Prism (Market, Market')
 import Data.IORef
 import Data.Tuple (swap)
 import Data.Either (either)
 
---These can be the same IORef when you want to be modifying one reference.
---could extend to STRefs, MVars and TVars:
---http://hackage.haskell.org/package/global-variables-1.0.1.1/docs/Data-Global.html
---data Ref a b = forall s t. Ref (IORef s) (IORef t) (Lens s t a b)
---data Ref' i a b = forall s t. Ref' (IORef s) (IORef t) (IndexedLens i s t a b)
---mapl :: Lens' a b -> Ref a -> Ref b
---maplike :: ((a1 -> f a1) -> a2 -> f a2) -> Ref f a2 -> Ref f a1
+
 {-
 
 data Ref1 x f a = forall s . Ref1 (x s) (LensLike f s s a a)
@@ -96,8 +79,6 @@ newIOWRef1 :: s -> LensLike Identity s s a a -> IO (WRef1 IORef a)
 newIOWRef1 = newIORef1
 -}
 
---data Ref x p q f a b = forall s t . Ref (Optical p q f s t a b) (x s) (x t)
---data Ref' x p q f a = forall s . Ref' (Optical' p q f s a) (x s)
 
 data Ref x f a b = forall s t . Ref (LensLike f s t a b) (x s) (x t)
 

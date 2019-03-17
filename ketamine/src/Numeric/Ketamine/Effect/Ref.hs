@@ -23,18 +23,16 @@ import Data.Void (Void)
 import Data.Functor.Identity
 
 --import qualified Control.Lens as Lens
-import qualified Control.Lens as L
-import qualified Control.Lens.Internal.Bazaar as L
-import qualified Control.Lens.Internal.Context as L
+--import qualified Control.Lens as L
+--import qualified Control.Lens.Internal.Bazaar as L
+--import qualified Control.Lens.Internal.Context as L
 
-import Control.Lens.Type
-import Control.Lens.Internal.Prism (Market, Market')
+--import Control.Lens.Type
+--import Control.Lens.Internal.Prism (Market, Market')
 import Data.IORef
 import Data.Tuple (swap)
 import Data.Either (either)
 
---data Ref a b = forall s. Ref (IORef s) (Lens s s a b)
---
 --These can be the same IORef when you want to be modifying one reference.
 --could extend to STRefs, MVars and TVars:
 --http://hackage.haskell.org/package/global-variables-1.0.1.1/docs/Data-Global.html
@@ -98,91 +96,46 @@ newIOWRef1 :: s -> LensLike Identity s s a a -> IO (WRef1 IORef a)
 newIOWRef1 = newIORef1
 -}
 
-data Ref x p q f a b = forall s t . Ref (Optical p q f s t a b) (x s) (x t)
+--data Ref x p q f a b = forall s t . Ref (Optical p q f s t a b) (x s) (x t)
+--data Ref' x p q f a = forall s . Ref' (Optical' p q f s a) (x s)
 
-data Ref' x p q f a = forall s . Ref' (Optical' p q f s a) (x s)
+data Ref x f a b = forall s t . Ref (LensLike f s t a b) (x s) (x t)
 
-type PRef x a b = forall p f. (L.Choice p, Applicative f) => Ref x p p f a b 
-type LRef x a b = forall f. Functor f => Ref x (->) (->) f a b 
-
-newRef :: s -> t -> Optical p q f s t a b -> IO (Ref IORef p q f a b)
+newRef :: s -> t -> LensLike f s t a b -> IO (Ref IORef f a b)
 newRef s t o = (Ref o) <$> newIORef s <*> newIORef t 
 
-newRef' :: s -> Optical p q f s s a b -> IO (Ref IORef p q f a b)
+newRef' :: s -> LensLike f s s a b -> IO (Ref IORef f a b)
 newRef' s o = do
     s' <- newIORef s 
     return $ Ref o s' s'
 
---newPRef' :: s -> Prism s s a b -> IO (PRef IORef (Market' a) (Market a b) f a b)
---newPRef' = newRef'
-
---modifyP :: Ref IORef (Market a b) (Market a b) Identity a b -> (a -> b) -> IO ()
-modifyP (Ref p s t) f = foo =<< readIORef s  where foo s' = L.withPrism p $ \bt seta -> either (writeIORef t) (writeIORef t . bt . f) (seta s')
-
---ASetter s s a b -> Ref IORef s -> (a -> b) -> IO ()
---modifyL :: Ref IORef p q f a b1 -> (b2 -> t) -> IO b3
---modifyL :: Ref IORef (->) (->) Identity a b -> (a -> b) -> IO ()
---modifyL (Ref l s t) f = foo =<< readIORef s  where foo s' = withLens l $ \sa sbt -> (writeIORef t $ sbt s' (f . sa $ s'))
-
---withLens :: Lens s t a b -> ((s -> a) -> (s -> b -> t) -> r) -> r
-withLens = undefined
-
 withSetter :: LensLike Identity s t a b -> (((a -> b) -> s -> t) -> r) -> r
 withSetter l f = f . cloneSetter $ l
 
--- TODO use cloneSetter to unify modifyL & modifyP
 cloneSetter :: LensLike Identity s t a b -> ((a -> b) -> s -> t)
 cloneSetter l afb = runIdentity . l (Identity . afb)
 
-cloneIndexedSetter
-  :: L.Indexable i p =>
-     (L.Indexed i a1 (Identity a2) -> a3 -> Identity c)
-     -> p a1 a2 -> a3 -> c
-cloneIndexedSetter l pafb = runIdentity . l (L.Indexed $ \i -> Identity . (L.indexed pafb i))
-
---withGetter :: Getter s a -> ((s -> a) -> r) -> r
 withGetter :: LensLike (Const c) s t a b -> (((a -> c) -> s -> c) -> r) -> r
 withGetter l f = f . cloneGetter $ l
 
 cloneGetter :: LensLike (Const c) s t a b -> (a -> c) -> s -> c
 cloneGetter l afb = getConst . l (Const . afb)
 
-withFoo
-  :: (L.Bizarre p1 w1, Applicative f, L.Sellable p2 w2) =>
-     (p2 a1 (w2 a1 b1 b1) -> a2 -> w1 a3 b2 t)
-     -> ((p1 a3 (f b2) -> a2 -> f t) -> c) -> c
-withFoo l f = f . foo $ l
+viewRef :: Ref IORef (Const a) a b -> IO a
+viewRef (Ref l s t) = with <$> readIORef s  
+    where with s' = withGetter l $ \acsc -> acsc id s' 
 
-foo l f = L.bazaar f . l L.sell
-
-view :: Ref IORef (->) (->) (Const a) a b -> IO a
-view (Ref l s t) = foo <$> readIORef s  
-  where foo s' = withGetter l $ \acsc -> acsc id s' 
-
-over :: Ref IORef (->) (->) Identity a b -> (a -> b) -> IO ()
-over (Ref l s t) f = foo =<< readIORef s  
-  where foo s' = withSetter l $ \abst -> (writeIORef t $ abst f s')
+overRef :: Ref IORef Identity a b -> (a -> b) -> IO ()
+overRef (Ref l s t) f = with =<< readIORef s  
+    where with s' = withSetter l $ \abst -> (writeIORef t $ abst f s')
 
 
---modifyPRef :: PRef IORef a b -> (a -> b) -> IO ()
-over' :: Ref IORef (Market a b) (Market a b) Identity a b -> (a -> b) -> IO ()
-over' (Ref p s t) f = foo =<< readIORef s
-  where foo s' = L.withPrism p $ \bt seta -> either (writeIORef t) (writeIORef t . bt . f) (seta s')
-
-preview :: Ref IORef (Market a b) (Market a b) Identity a b -> IO (Maybe a)
-preview (Ref p s t) = foo <$> readIORef s
-  where foo s' = L.withPrism p $ \_ seta -> either (\_ -> Nothing) Just (seta s')
 
 --newLensRef :: PrimMonad m => s -> Lens s s a a -> m (RRef1 (PrimState m) a)
 {-
 http://hackage.haskell.org/package/primitive-0.6.4.0/docs/Data-Primitive-MutVar.html
 also MVar, TVar, Ptr
 
-class Mutable x where 
-  newRef
-  readRef
-  writeRef
-  modifyRef s f = readRef s >>= writeRef s . f
 
 s = "5"
 s' <- newIORef s
@@ -237,87 +190,8 @@ over o (Sum . length)
 [Sum {getSum = 2},Sum {getSum = 6}]
 
 
-
-
-s = Just "hi" :: Maybe String
-s = 5
-s' = newIORef s
-o' = Ref _Show s' s'
-o = newRef' s _Nothing
-modifyP o head
-
-
-s = Right "hi" :: Either Int String
-t = Left 3 :: Either Int Int
-
-s' <- newIORef s
-t' <- newIORef t
-o = ORef _Right s' t'
-
-p = PRef _Right s' t'
-> modifyPRef2 p length
-> readIORef s'
-Right "hi"
-> readIORef t'
-Right 2
-> readPRef p
-Just "hi"
-> modifyPRef2 p ((+2) . length)
-> readPRef p
-Just "hi"
-> readIORef t'
-Right 4
-
-
-p <- newPRef s t _Right
-modifyPRef p length
-readPRef p
-
-s = Right 4 :: Either String Int
-t = Right 3 :: Either Int Int
-
-p <- newPRef' 4 $ only 4
-
-(p' :: PRef IORef String Int) <- newPRef s t _Left
-
-p :: PRef IORef String Int
-modifyPRef p' length
 -}
 
-{-
-data LRef' x a = forall s . LRef' (Lens' s a) (x s)
-
-data PRef x a b = forall s t. PRef (Prism s t a b) (x s) (x t)
-
-data PRef' x a = forall s. PRef' (Prism' s a) (x s)
-
-newPRef :: s -> t -> Prism s t a b -> IO (PRef IORef a b)
-newPRef s t p = (PRef p) <$> newIORef s <*> newIORef t 
-
---
---
-newPRef' :: s -> Prism' s a -> IO (PRef' IORef a)
-newPRef' s p = (PRef' p) <$> newIORef s 
-
-
-modifyPRef :: PRef IORef a b -> (a -> b) -> IO ()
-modifyPRef (PRef p s t) f = foo =<< readIORef s
-  where foo s' = withPrism p $ \bt seta -> either (writeIORef t) (writeIORef t . bt . f) (seta s')
-
-modifyPRef' :: PRef' IORef a -> (a -> a) -> IO ()
-modifyPRef' (PRef' p s) f = foo =<< readIORef s
-  where foo s' = withPrism p $ \as sesa -> either (writeIORef s) (writeIORef s . as . f) (sesa s')
-
-readPRef :: PRef IORef a b -> IO (Maybe a)
-readPRef (PRef p s t) = foo <$> readIORef s
-  where foo s' = withPrism p $ \_ seta -> either (\_ -> Nothing) Just (seta s')
-
-newLRef' :: s -> Lens s s a a -> IO (LRef' IORef a)
-newLRef' s l = newIORef s >>= \r -> return (LRef' l r) 
-
-modifyLRef' :: LRef' IORef a -> (a -> a) -> IO ()
-modifyLRef' (LRef' l r) f = modifyIORef r (over l f)
--}
 
 
 {-
@@ -408,79 +282,5 @@ viewRefIxed
 viewRefIxed i = viewsRef $ maplike (ix i)
 -}
 --overRef f = views conf f >>= liftIO . readRef
-
-
-{-
-
-
-Data.IORef.modifyIORef' :: IORef a -> (a -> a) -> IO ()
-GHC.IORef.newIORef :: a -> IO (IORef a)
-GHC.IORef.readIORef :: IORef a -> IO a
-GHC.IORef.writeIORef :: IORef a -> a -> IO ()
-
-type ScalarRef s = Ref Void s
---
--- | Read from a Ref
---
-readRef :: MonadIO m => Ref k s -> k -> m s
-readRef (Ref r _) k = liftIO $ r k
-
--- | Write to a Ref
---
-writeRef :: MonadIO m => Ref k s -> k -> s -> m ()
-writeRef (Ref _ w) k s = liftIO $ w k s
-
--- | Modify a Ref
--- This function is subject to change due to the lack of atomic operations
---
-modifyRef :: MonadIO m => Ref k s -> k -> (s -> s) -> m ()
-modifyRef (Ref r w) k f = liftIO $ fmap f (r k) >>= w k
-
-toScalarRef :: IORef s -> Ref Void s
-toScalarRef rf = do
-    Ref (\_ -> readIORef rf)
-            (\_ val -> modifyIORef' rf (\_ -> val))
-
--- | create a new boxed Ref
---
-newScalarRef :: MonadIO m => s -> m (Ref Void s)
-newScalarRef s = toScalarRef <$> newIORef s
-
--}
-
-{-
---
--- | Read from a Ref
---
-readRef :: MonadIO m => Ref a -> m a
-readRef (Ref x _) = liftIO x
-
--- | Write to a Ref
---
-writeRef :: MonadIO m => Ref a -> a -> m ()
-writeRef (Ref _ x) = liftIO . x
-
--- | Modify a Ref
--- This function is subject to change due to the lack of atomic operations
---
-modifyRef :: MonadIO m => Ref a -> (a -> a) -> m ()
-modifyRef (Ref r w) f = liftIO $ fmap f r >>= w
-
-ioRefToRef :: IORef a -> Ref a
-ioRefToRef rf = do
-    Ref (readIORef rf)
-            (\val -> modifyIORef' rf (\_ -> val))
-
--- | create a new boxed Ref
---
-newRef :: MonadIO m => a -> m (Ref a)
-newRef a = do
-    ioRefToRef <$> newIORef a
--}
-
-
-
-
-
 
 

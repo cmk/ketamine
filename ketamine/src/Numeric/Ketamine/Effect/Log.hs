@@ -86,7 +86,8 @@ module Numeric.Ketamine.Effect.Log (
 
 import           Control.Exception (SomeException)
 import           Control.Exception.Safe (Exception (..), MonadMask)
-import           Control.Lens (over, set, view)
+-- import           Control.Lens (over, set, view)
+-- import           Lens.Micro.Mtl (over, set, view)
 import           Control.Monad (when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Reader (MonadReader, ReaderT (..), local)
@@ -98,7 +99,7 @@ import           System.Posix.Process (getProcessID)
 
 import           Numeric.Ketamine.Effect.Log.Logfmt (fmtString, formatLogfmt)
 import           Numeric.Ketamine.Effect.Log.Types
-
+import           Numeric.Ketamine.Types
 import qualified Control.Exception.Safe as Safe
 
 

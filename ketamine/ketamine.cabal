@@ -53,6 +53,9 @@ library
     , fast-logger
     , lens
     , mmorph
+    , microlens
+    , microlens-mtl
+    , microlens-th
     , monad-loops
     , mtl
     , murmur-hash

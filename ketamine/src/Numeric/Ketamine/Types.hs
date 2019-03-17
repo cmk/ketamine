@@ -5,19 +5,33 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Numeric.Ketamine.Types where
+module Numeric.Ketamine.Types (
+    Conf (..)
+  , view
+  , preview
+  , module Export
+) where
 
 import GHC.Exts (RealWorld)
 
-import Control.Lens
+--import Control.Lens
+
+import Control.Applicative (Const(..))
 import Control.Exception.Safe
 import Control.Monad.IO.Class --(MonadIO(..))
 import Control.Monad.IO.Unlift (MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
 import Control.Monad.Primitive  (PrimMonad (..))
-import Control.Monad.Reader (MonadReader(..))
+import Control.Monad.Reader as Reader
+--import Control.Monad.Reader (MonadReader(..))
 import Control.Monad.Trans.Reader (ReaderT(..))
+import Data.Monoid (First(..))
 --import Data.IORef 
 import UnliftIO
+
+import Lens.Micro as Export
+import Lens.Micro.Type as Export
+import Lens.Micro.Internal
+
 import Numeric.Ketamine.Effect.State
 import Numeric.Ketamine.Effect.Random
 
@@ -27,6 +41,36 @@ import qualified System.Random.TF.Instances   as TF
 
 
 class Conf a e | e -> a where conf :: Lens' e a
+
+{- |
+'view' is a synonym for ('^.'), generalised for 'MonadReader' (we are able to use it instead of ('^.') since functions are instances of the 'MonadReader' class):
+
+>>> view _1 (1, 2)
+1
+
+When you're using 'Reader.Reader' for config and your config type has lenses generated for it, most of the time you'll be using 'view' instead of 'Reader.asks':
+
+@
+doSomething :: ('MonadReader' Config m) => m Int
+doSomething = do
+  thingy        <- 'view' setting1  -- same as “'Reader.asks' ('^.' setting1)”
+  anotherThingy <- 'view' setting2
+  ...
+@
+-}
+view :: MonadReader s m => Getting a s a -> m a
+view l = Reader.asks (getConst #. l Const)
+{-# INLINE view #-}
+
+{- |
+'preview' is a synonym for ('^?'), generalised for 'MonadReader' (just like 'view', which is a synonym for ('^.')).
+
+>>> preview each [1..5]
+Just 1
+-}
+preview :: MonadReader s m => Getting (First a) s a -> m (Maybe a)
+preview l = Reader.asks (getFirst #. foldMapOf l (First #. Just))
+{-# INLINE preview #-}
 
 
 {-

@@ -51,7 +51,9 @@ module Numeric.Ketamine.Effect.Log.Types (
 import Control.Applicative
 import           Control.Concurrent (ThreadId)
 import           Control.Exception (SomeException)
-import           Control.Lens (Lens', makeLenses)
+--import           Control.Lens (Lens', makeLenses)
+import Lens.Micro (Lens')
+import Lens.Micro.TH (makeLenses)
 import Data.Bifunctor
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as LB
@@ -96,10 +98,9 @@ renderLogLevel severity =
     Err -> "err"
 
 
-newtype LogFormat =
-  LogFormat {
-      runLogFormat :: forall msg. IsLogStr msg => LogLevel -> Maybe Loc -> LogContext -> msg -> LogStr
-    }
+newtype LogFormat = LogFormat {
+  runLogFormat :: forall msg. IsLogStr msg => LogLevel -> Maybe Loc -> LogContext -> msg -> LogStr
+  }
 
 data Logger =
   Logger {
@@ -108,6 +109,7 @@ data Logger =
     , _loggerFmt :: !LogFormat
     , _loggerOut :: LogStr -> IO ()
     }
+--makeLenses ''Logger
 
 class HasLogger s a | s -> a where
   logger :: Lens' s a

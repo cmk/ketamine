@@ -33,6 +33,15 @@ import Lens.Micro as Export
 import Lens.Micro.Type as Export
 import Lens.Micro.Internal as Export
 
+newtype AgtState s = AgtState { _agtState :: s }
+
+newtype EntState s = EntState { _entState :: s }
+
+class EnState s e | e -> s where en_state :: Lens' e (AgtState s)
+
+class AgState s a | a -> s where ag_state :: Lens' a (EntState s)
+
+-- TODO re-exports only
 class Conf a e | e -> a where conf :: Lens' e a
 
 {- |

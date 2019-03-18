@@ -112,7 +112,6 @@ import Control.Monad.State (MonadState)
 
 import Control.Monad.ST             (ST)
 import Control.Monad.Trans.Class    (MonadTrans (lift))
-import Control.Monad.Trans.Lift.StT (StT)
 
 import Data.Functor.Identity        (Identity, runIdentity)
 import Data.List                    (find)

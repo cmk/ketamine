@@ -1,10 +1,11 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ExistentialQuantification     #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE LambdaCase, DeriveFunctor, RankNTypes #-}
-{-# LANGUAGE TypeApplications, TemplateHaskell , ExistentialQuantification           #-}
+{-# LANGUAGE RankNTypes #-}
 
  {-# OPTIONS_GHC -w #-}
 -- | Environment values with stateful capabilities.
@@ -14,17 +15,40 @@ module Numeric.Ketamine.Effect.Ref where
 import Numeric.Ketamine.Types
 import Control.Applicative (Const(..))
 import Control.Monad.IO.Class (MonadIO(..))
-import Control.Monad.Reader (MonadReader(..))
-import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.Primitive (PrimMonad, PrimState, RealWorld)
+import Control.Monad.Reader (MonadReader)
 import Data.Functor.Identity
 import Data.Tuple (swap)
 
-import Control.Monad.Primitive
+
 import Data.Primitive.MutVar (MutVar)
 import qualified Data.Primitive.MutVar as M
 
 
+
 {-
+import Lens.Micro.GHC
+
+im = IntMap.fromList [(1,"hi"), (2,"there")]
+im' <- M.newMutVar im
+
+r = Ref id im' 
+r' = ixRef 1 r
+r'' = atRef 1 r
+
+> readRef r'
+"hi"
+> readRef r''
+Just "hi"
+
+rbad' = ixRef 3 r
+
+> readRef rbad'
+""
+
+ixRef :: (Ixed a, Applicative f) => Index a -> Ref x f a -> Ref x f (IxValue a)
+ixRef = llmap . ix
+
 
 s = ["hi", "there"] :: [String]
 
@@ -56,6 +80,9 @@ type IOWrite a = IORef Identity a
 type STRef s = Ref s
 type STRead s a = STRef s (Const a) a
 type STWrite s a = STRef s Identity a
+
+newLensRef :: (Functor f, PrimMonad m) => MutVar (PrimState m) s -> Lens' s a -> Ref (PrimState m) f a
+newLensRef s l = Ref l s
 
 newRef :: PrimMonad m => s -> LensLike' f s a -> m (Ref (PrimState m) f a)
 newRef s l = (Ref l) <$> M.newMutVar s 

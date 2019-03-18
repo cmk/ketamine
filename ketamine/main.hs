@@ -30,15 +30,18 @@ import Numeric.Ketamine.Agent
 import Numeric.Ketamine.Environment
 import Numeric.Ketamine.Episode
 import Numeric.Ketamine.Effect.Exception (EpisodeCompleted(..))
+import qualified Numeric.Ketamine.Effect.Ref as R
+
 import qualified Numeric.Ketamine.Effect.Log as L
 
---import           Control.Lens (Lens', (^.), makeLenses, to)
 import qualified Control.Monad.Reader as MTL
 import           Control.Monad.Trans.Except (runExceptT)
 import           Control.Monad (void)
+import Control.Monad.Primitive (PrimMonad, PrimState, RealWorld)
 
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Foldable
+import qualified Data.Primitive.MutVar as M
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import           Data.Text.Encoding (encodeUtf8)
@@ -50,18 +53,35 @@ import Numeric.Ketamine.Types
 
 
 
+
 data TestCapabilities = TestCaps
     { _testlogger :: !L.Logger
+      , _testState :: (Int,Int) -- ag state / env state
     }
 makeLenses ''TestCapabilities
 
 instance L.HasLogger TestCapabilities L.Logger where
   logger = testlogger
 
+type EpState = (Int, Int)
+
+initial :: EpState
+initial = (0,0)
+
+
+test3 :: IO ()
+test3 = do 
+  (epState :: M.MutVar RealWorld EpState) <- M.newMutVar initial
+
+  let --agRef :: R.IORef 
+      agRef = R.newLensRef epState (_1 :: Lens' EpState Int)
+      -- enRef = R.Ref (_2 :: Lens' EpState Int) epState
+ 
+  return ()
+
 -- Log the configuration.
 info :: (MTL.MonadIO m, L.HasLogger r L.Logger) => r -> Text -> m ()
 info caps msg = void . flip MTL.runReaderT caps $ L.infoT msg
-
 
 getPath
   :: (MonadIO m, L.HasLogger r L.Logger) =>
@@ -76,7 +96,7 @@ logPath path = L.infoT . Text.pack $ printf "path is: %s" path
 foo :: (MonadIO m, MonadMask m) => ReaderT TestCapabilities m a -> m a
 foo k = L.withStdLogger L.Info $ \l ->
   let 
-    caps = TestCaps l
+    caps = TestCaps l initial
 
   in MTL.runReaderT k caps
 

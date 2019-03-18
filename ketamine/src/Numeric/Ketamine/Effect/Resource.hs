@@ -1,12 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module Numeric.Ketamine.Effect.Resource
-    ( module Resource
-    )
-where
+module Numeric.Ketamine.Effect.Resource where
 
-import Control.Monad.Trans.Lift.Local
-import Control.Monad.Trans.Resource   as Resource
-
-instance LiftLocal Resource.ResourceT where
-    liftLocal _ l = Resource.transResourceT . l

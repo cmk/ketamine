@@ -1,4 +1,6 @@
 
+
+
 - make MonadEnv polymorphic enough to support Conduit https://www.tweag.io/posts/2017-10-05-streaming2.html
 
 makeInputStream :: MonadUnliftIO m => m (Maybe a) -> m (InputStream a)
@@ -40,7 +42,35 @@ https://www.yesodweb.com/blog/2014/03/network-conduit-async
 http://hackage.haskell.org/package/pipes-http-1.0.6/docs/Pipes-HTTP.html
 
 
-(select (all_ (_ chinookDb)))
+TODO: break 2 libs out (logfmt and lens-ref) and document
+
+-- | Canonical Logging Interface
+--
+-- Minimalistic example:
+--
+-- >>> :set -XOverloadedStrings
+-- >>> :set -XTypeApplications
+-- >>> :m Platform.Effect Platform.Log Data.Text
+-- >>> :{
+-- runStdLogging . flip evalStateT (0 :: Int) $ do
+--     infoT "been here"
+--     modify (+ (1 :: Int))
+--     withContext (Namespace "banana") $ do
+--         errT "ouch!"
+--         modify (+ (1 :: Int))
+--         withContext (Namespace "rpc" +++ field "moon" ("full" :: Text)) $ do
+--             x <- get @Int
+--             infoT "done that" `inContext` field "state" (show x)
+--             debugT "Look, my password lol!" `inContext` field "password" ("s3cr3t" :: Text)
+--             infoT "ok tschüss!"
+--     infoT "epilogue"
+-- :}
+-- level="info" msg="been here" pid=65499 prog="<interactive>" loc="interactive:Ghci1:6:5"
+-- level="error" msg="ouch!" ns="banana" pid=65499 prog="<interactive>" loc="interactive:Ghci1:9:9"
+-- level="info" msg="done that" moon="full" ns="rpc" pid=65499 prog="<interactive>" state="2" loc="interactive:Ghci1:13:13"
+-- level="info" msg="ok tschüss!" moon="full" ns="rpc" pid=65499 prog="<interactive>" loc="interactive:Ghci1:15:13"
+-- level="info" msg="epilogue" pid=65499 prog="<interactive>" loc="interactive:Ghci1:16:5"
+--
 
 runStdLogging . flip evalStateT (0 :: Int) $ m
 

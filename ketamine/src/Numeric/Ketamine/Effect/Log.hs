@@ -4,33 +4,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | Canonical Logging Interface
---
--- Minimalistic example:
---
--- >>> :set -XOverloadedStrings
--- >>> :set -XTypeApplications
--- >>> :m Platform.Effect Platform.Log Data.Text
--- >>> :{
--- runStdLogging . flip evalStateT (0 :: Int) $ do
---     infoT "been here"
---     modify (+ (1 :: Int))
---     withContext (Namespace "banana") $ do
---         errT "ouch!"
---         modify (+ (1 :: Int))
---         withContext (Namespace "rpc" +++ field "moon" ("full" :: Text)) $ do
---             x <- get @Int
---             infoT "done that" `inContext` field "state" (show x)
---             debugT "Look, my password lol!" `inContext` field "password" ("s3cr3t" :: Text)
---             infoT "ok tschüss!"
---     infoT "epilogue"
--- :}
--- level="info" msg="been here" pid=65499 prog="<interactive>" loc="interactive:Ghci1:6:5"
--- level="error" msg="ouch!" ns="banana" pid=65499 prog="<interactive>" loc="interactive:Ghci1:9:9"
--- level="info" msg="done that" moon="full" ns="rpc" pid=65499 prog="<interactive>" state="2" loc="interactive:Ghci1:13:13"
--- level="info" msg="ok tschüss!" moon="full" ns="rpc" pid=65499 prog="<interactive>" loc="interactive:Ghci1:15:13"
--- level="info" msg="epilogue" pid=65499 prog="<interactive>" loc="interactive:Ghci1:16:5"
---
+
 module Numeric.Ketamine.Effect.Log (
     Logger
   , HasLogger (..)
@@ -86,8 +60,6 @@ module Numeric.Ketamine.Effect.Log (
 
 import           Control.Exception (SomeException)
 import           Control.Exception.Safe (Exception (..), MonadMask)
--- import           Control.Lens (over, set, view)
--- import           Lens.Micro.Mtl (over, set, view)
 import           Control.Monad (when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Reader (MonadReader, ReaderT (..), local)
@@ -96,7 +68,6 @@ import           GHC.Stack (HasCallStack, SrcLoc (..), callStack, getCallStack)
 import           System.Environment (getProgName)
 import           System.Log.FastLogger (defaultBufSize, newStderrLoggerSet, pushLogStrLn, rmLoggerSet)
 import           System.Posix.Process (getProcessID)
-
 import           Numeric.Ketamine.Effect.Log.Logfmt (fmtString, formatLogfmt)
 import           Numeric.Ketamine.Effect.Log.Types
 import           Numeric.Ketamine.Types
@@ -167,16 +138,21 @@ withStdLogger sev f = Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
 -- | Very minimal logger. Doesn't print much except errors.
 --
 -- 'LogContext'. Log output is buffered and goes to @stderr@.
-withMinimalLogger :: (MonadIO m, MonadMask m) => LogLevel -> (Logger -> m a) -> m a
-withMinimalLogger sev f = Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
-  where
-    stdLogger = do
-        io <- newStderrLoggerSet defaultBufSize
-        let
-          fmt = LogFormat (\_ _ _ msg -> fmtString msg)
-          out = pushLogStrLn io
+withMinimalLogger 
+  :: (MonadIO m, MonadMask m) 
+  => LogLevel 
+  -> (Logger -> m a) 
+  -> m a
+withMinimalLogger sev f = 
+  Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+    where
+      stdLogger = do
+          io <- newStderrLoggerSet defaultBufSize
+          let
+            fmt = LogFormat (\_ _ _ msg -> fmtString msg)
+            out = pushLogStrLn io
 
-        pure (newLogger sev mempty fmt (liftIO . out), rmLoggerSet io)
+          pure (newLogger sev mempty fmt (liftIO . out), rmLoggerSet io)
     
 
 runStdLogging :: (MonadIO m, MonadMask m) => ReaderT Logger m a -> m a
@@ -294,7 +270,7 @@ logException ::
   -> m ()
 logException e =
   withContext (toException e +++ callStack) $
-    errT "An exception occurred"
+    errT "An exception occurred."
 
 -- | Run an action and log any exception that might occur.
 --

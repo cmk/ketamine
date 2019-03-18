@@ -54,6 +54,7 @@ library
     , mmorph
     , microlens
     , microlens-th
+    , microlens-ghc
     , monad-loops
     , mtl
     , murmur-hash
@@ -61,7 +62,6 @@ library
     , pipes
     , pipes-safe
     , primitive
-    , profunctors
     , random-fu
     , random-source
     , resourcet
@@ -73,7 +73,6 @@ library
     , template-haskell
     , tf-random
     , transformers
-    , transformers-lift
     , unordered-containers
     , unliftio
     , unliftio-core

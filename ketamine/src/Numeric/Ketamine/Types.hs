@@ -8,6 +8,7 @@
 module Numeric.Ketamine.Types (
     Conf (..)
   , view
+  , views
   , preview
   , module Export
 ) where
@@ -30,7 +31,7 @@ import UnliftIO
 
 import Lens.Micro as Export
 import Lens.Micro.Type as Export
-import Lens.Micro.Internal
+import Lens.Micro.Internal as Export
 
 class Conf a e | e -> a where conf :: Lens' e a
 
@@ -53,6 +54,9 @@ doSomething = do
 view :: MonadReader s m => Getting a s a -> m a
 view l = Reader.asks (getConst #. l Const)
 {-# INLINE view #-}
+
+views :: MonadReader s m => LensLike' (Const r) s a -> (a -> r) -> m r
+views l f = Reader.asks (getConst #. l (Const #. f))
 
 {- |
 'preview' is a synonym for ('^?'), generalised for 'MonadReader' (just like 'view', which is a synonym for ('^.')).

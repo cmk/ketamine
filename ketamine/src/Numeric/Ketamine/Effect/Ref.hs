@@ -16,79 +16,246 @@ import Control.Applicative (Const(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Reader (MonadReader(..))
 import Control.Monad.Trans.Reader (ReaderT(..))
-import Data.Void (Void)
 import Data.Functor.Identity
-import Data.IORef
 import Data.Tuple (swap)
-import Data.Either (either)
+
+import Control.Monad.Primitive
+import Data.Primitive.MutVar (MutVar)
+import qualified Data.Primitive.MutVar as M
 
 
 {-
 
-data Ref1 x f a = forall s . Ref1 (x s) (LensLike f s s a a)
-type RRef1 x a = Ref1 x (Const a) a
-type WRef1 x a = Ref1 x Identity a
+s = ["hi", "there"] :: [String]
 
-type IOWRef1 a = WRef1 IORef a
---type LRef1 r a = forall f . Functor f => Ref1 r f a
-type IORRef1 a = RRef1 IORef a
---LensLike (Const a) a a a a
-
---type STRef1 = Ref1 STRef
---type MVar1 = Ref1 MVar
-maplike1 :: LensLike f a1 a1 a2 a2 -> Ref1 r f a1 -> Ref1 r f a2
-maplike1 l = f $ traverseOf l
-  where f l' (Ref1 ref l) = Ref1 ref (l . l')
-
-instance Contravariant f => Functor (Ref1 r f) where
-    fmap = maplike1 . to
-
-maplike2 :: LensLike f a1 b1 a2 b2 -> Ref2 r f a1 b1 -> Ref2 r f a2 b2
-maplike2 l = f $ traverseOf l
-  where f l' (Ref2 r1 r2 l) = Ref2 r1 r2 (l . l')
-
---TODO grok behavior
-modifyRef1' :: Ref1 IORef ((,) b) a -> (a -> (a, b)) -> IO b
-modifyRef1' (Ref1 r l) f = atomicModifyIORef' r (swap . traverseOf l (swap . f))
-
-modifyRef1 :: IOWRef1 a -> (a -> a) -> IO ()
-modifyRef1 (Ref1 r l) f = modifyIORef r (over l f)
-
---r <- newIORRef1 1 (to (+1))
---n <- newIOWRef1 (1,2) _1
---n <- newIOLRef1 (1,2) _1
---
---sayref (Ref1 r _) = readIORef r
-
-readIORef1 :: RRef1 IORef a -> IO a
-readIORef1 (Ref1 r l) = view l <$> readIORef r
-
-newIORef1' :: r -> IO (Ref1 IORef f r)
-newIORef1' r = newIORef1 r id
-
---newRRef1 :: r -> IO (RRef1 IORef a)
-newIORef1 :: s -> LensLike f s s a a -> IO (Ref1 IORef f a)
-newIORef1 r g = newIORef r >>= \r' -> return (Ref1 r' g) 
-
---r <- newIORRef1 1 (to (+1))
-newIORRef1 :: s -> LensLike (Const a) s s a a -> IO (RRef1 IORef a)
-newIORRef1 = newIORef1
-
--- n <- newIOWRef1 (1,2) _1
-newIOWRef1 :: s -> LensLike Identity s s a a -> IO (WRef1 IORef a)
-newIOWRef1 = newIORef1
+s' <- M.newMutVar s
+l = Ref traverse s'
+> f a = (a ++ a, a)
+> atomicModifyRef' l f
+"hithere"
+> readRef l
+"hihitherethere"
+> M.readMutVar s'
+["hihi","therethere"]
+> g a = (a,"bar")
+> atomicModifyRef' l g
+"barbar"
+> M.readMutVar s'
+["hihi","therethere"]
 -}
 
+-- | Abstraction over a mutable reference. 
+data Ref x f a = forall s . Ref (LensLike' f s a) (MutVar x s)
 
-data Ref x f a b = forall s t . Ref (LensLike f s t a b) (x s) (x t)
+instance Functor (Ref x (Const r)) where fmap = llmap . to
 
-newRef :: s -> t -> LensLike f s t a b -> IO (Ref IORef f a b)
-newRef s t o = (Ref o) <$> newIORef s <*> newIORef t 
+type IORef = Ref RealWorld
+type IORead a = IORef (Const a) a
+type IOWrite a = IORef Identity a
 
-newRef' :: s -> LensLike f s s a b -> IO (Ref IORef f a b)
-newRef' s o = do
-    s' <- newIORef s 
-    return $ Ref o s' s'
+type STRef s = Ref s
+type STRead s a = STRef s (Const a) a
+type STWrite s a = STRef s Identity a
+
+newRef :: PrimMonad m => s -> LensLike' f s a -> m (Ref (PrimState m) f a)
+newRef s l = (Ref l) <$> M.newMutVar s 
+
+readRef :: PrimMonad m => Ref (PrimState m) (Const a) a -> m a
+readRef (Ref l r) = view l <$> M.readMutVar r
+
+writeRef :: PrimMonad m => Ref (PrimState m) Identity a -> a -> m ()
+writeRef (Ref l r) a = M.modifyMutVar r (set l a)
+
+modifyRef :: PrimMonad m => Ref (PrimState m) Identity a -> (a -> a) -> m ()
+modifyRef (Ref l r) f = M.modifyMutVar r (over l f)
+
+atomicModifyRef
+  :: PrimMonad m => Ref (PrimState m) ((,) b) a -> (a -> (a, b)) -> m b
+atomicModifyRef (Ref l r) f = M.atomicModifyMutVar r (swap . traverseOf l (swap . f))
+
+-- | Strict version of 'writeRef'.
+writeRef' :: PrimMonad m => Ref (PrimState m) Identity a -> a -> m ()
+writeRef' (Ref l r) a = M.modifyMutVar' r (set l a)
+
+-- | Strict version of 'modifyRef'.
+modifyRef' :: PrimMonad m => Ref (PrimState m) Identity a -> (a -> a) -> m ()
+modifyRef' (Ref l r) f = M.modifyMutVar' r (over l f)
+
+-- | Strict version of 'atomicModifyRef'.
+atomicModifyRef'
+  :: PrimMonad m => Ref (PrimState m) ((,) b) a -> (a -> (a, b)) -> m b
+atomicModifyRef' (Ref l r) f = M.atomicModifyMutVar' r (swap . traverseOf l (swap . f))
+
+viewRefWith
+  :: (Conf r s, MonadReader s m, MonadIO m) 
+  => Getting (IORead a) r (IORead a) -> m a
+viewRefWith l = view (conf . l) >>= liftIO . readRef
+
+viewRef 
+  :: (Conf (IORead a) s, MonadReader s m, MonadIO m) 
+  => m a
+viewRef = viewRefWith id
+
+viewsRef
+  :: (MonadReader r m, Conf s r, MonadIO m) 
+  => (s -> IORead a) -> m a
+viewsRef f = views conf f >>= liftIO . readRef
+
+llmap :: LensLike' f s a -> Ref x f s -> Ref x f a
+llmap l = f $ traverseOf l where f l' (Ref l s) = Ref (l . l') s
+
+ixRef :: (Ixed a, Applicative f) => Index a -> Ref x f a -> Ref x f (IxValue a)
+ixRef = llmap . ix
+
+atRef :: (At a, Functor f) => Index a -> Ref x f a -> Ref x f (Maybe (IxValue a))
+atRef = llmap . at
+
+
+
+
+{-
+
+s = "5"
+s' <- newMutVar s
+o' = Ref2 _Show s' s'
+>  _ShowInt = _Show :: Prism' String Int
+> o' = Ref2 _ShowInt s' s'
+modifyP o' (+1)
+> readMutVar s'
+"6"
+
+s = ("hi!",2) :: (String, Int)
+t = (4,2)  :: (Int, Int)
+
+s' <- newMutVar s
+t' <- newMutVar t
+o = Ref2 _1 s' t'
+o' = Ref2 _1 s' s'
+modifyL o' tail
+readMutVar s'
+> readMutVar s'
+("i!",2)
+> readMutVar t'
+(4,2)
+> modifyL o length
+> readMutVar s'
+("i!",2)
+> readMutVar t'
+(2,2)
+
+import Data.Monoid
+
+s = ["hi", "there"] :: [String]
+t = fmap Sum [1..10] :: [Sum Int]
+
+s' <- M.newMutVar s
+t' <- M.newMutVar t
+
+o = Ref2 traverse s' t'
+o' = Ref2 traverse s' s'
+
+o :: Applicative f => Ref2 MutVar (->) (->) f String (Sum Int)
+o = Ref2 traverse s' t'
+o' :: Applicative f => Ref2 MutVar (->) (->) f String String
+o' = Ref2 traverse s' s'
+
+> y <- view o
+> y
+"hithere"
+
+modifyRef2 o (Sum . length)
+M.readMutVar t'
+[Sum {getSum = 2},Sum {getSum = 6}]
+
+modifyRef2 o' ("oh"++)
+M.readMutVar s'
+> M.readMutVar s'
+["ohhi","ohthere"]
+
+-}
+
+-- | Abstraction over a tuple of mutable references. The first reference is read-only.
+-- Use 'newRef2'' to mutate the first reference with a 'LensLike''.
+data Ref2 x f a b = forall s t . Ref2 (LensLike f s t a b) (MutVar x s) (MutVar x t)
+
+type IORef2 = Ref2 RealWorld
+type IORead2 a b = IORef2 (Const a) a b
+type IORead2' a = IORead2 a a
+type IOWrite2 a b = IORef2 Identity a b
+type IOWrite2' a = IOWrite2 a a
+
+type STRef2 s = Ref2 s
+type STRead2 s a b = STRef2 s (Const a) a b
+type STRead2' s a = STRead2 s a a
+type STWrite2 s a b = STRef2 s Identity a b
+type STWrite2' s a = STWrite2 s a a
+
+
+--data Ref2 x a b = forall s t . Ref2 (Lens s t a b) (MutVar x s) (MutVar x t)
+--type LensRef2 x a b = forall f . Functor f => Ref2 x f a b
+
+newRef2 :: PrimMonad m => s -> t -> LensLike f s t a b -> m (Ref2 (PrimState m) f a b)
+newRef2 s t o = (Ref2 o) <$> M.newMutVar s <*> M.newMutVar t 
+
+newRef2' :: PrimMonad m => s -> LensLike' f s a -> m (Ref2 (PrimState m) f a a)
+newRef2' s o = do
+    s' <- M.newMutVar s 
+    return $ Ref2 o s' s'
+
+readRef2 :: PrimMonad m => Ref2 (PrimState m) (Const a) a b -> m a
+readRef2 (Ref2 l s _) = with <$> M.readMutVar s  
+    where with s' = withGetter l $ \acsc -> acsc id s' 
+
+modifyRef2 :: PrimMonad m => Ref2 (PrimState m) Identity a b -> (a -> b) -> m ()
+modifyRef2 (Ref2 l s t) f = with =<< M.readMutVar s  
+    where with s' = withSetter l $ \abst -> (M.writeMutVar t $! abst f s')
+
+
+{-
+atomicModifyRef2 :: PrimMonad m => Ref2 (PrimState m) a b -> (a -> (a, b)) -> m b
+atomicModifyRef2 (Ref2 l s t) f = with =<< M.readMutVar s 
+    where with s' = withLens l $ \sa sbt -> do
+                        let (a, b) = f . sa $! s'
+                        M.writeMutVar t $! sbt s' b (f . sa $! s')
+                        return b
+
+--ASetter s s a b -> Ref2 IORef2 s -> (a -> b) -> IO ()
+--modifyL :: Ref2 IORef2 p q f a b1 -> (b2 -> t) -> IO b3
+--modifyL :: Ref2 IORef2 (->) (->) Identity a b -> (a -> b) -> IO ()
+--modifyL (Ref2 l s t) f = foo =<< readIORef2 s  where foo s' = withLens l $ \sa sbt -> (writeIORef2 t $ sbt s' (f . sa $ s'))
+
+--withLens :: Lens s t a b -> ((s -> a) -> (s -> b -> t) -> r) -> r
+withLens = undefined
+-}
+
+--  :: (Conf r1 r2, MonadReader r2 m, MonadIO m) => Getting (IORef2 (Const b1) b1 b2) a (IORef2 (Const b1) b1 b2) -> m b1
+
+viewRef2With
+  :: (Conf r s, MonadReader s m, MonadIO m) 
+  => Getting (IORead2 a b) r (IORead2 a b) -> m a
+viewRef2With l = view (conf . l) >>= liftIO . readRef2
+
+viewRef2 
+  :: (Conf (IORead2 a b) s, MonadReader s m, MonadIO m) 
+  => m a
+viewRef2 = viewRef2With id
+
+viewsRef2
+  :: (MonadReader r m, Conf s r, MonadIO m)
+  => (s -> IORead2 a b) -> m a
+viewsRef2 f = views conf f >>= liftIO . readRef2
+
+llmap2 :: LensLike f s t a b -> Ref2 x f s t -> Ref2 x f a b
+llmap2 l = f $ traverseOf l where f l' (Ref2 l s t) = Ref2 (l . l') s t
+
+mapRef2 :: (t -> b) -> Ref2 x (Const r) t t -> Ref2 x (Const r) b b 
+mapRef2 = llmap2 . to
+
+ixRef2 :: (Ixed a, Applicative f) => Index a -> Ref2 x f a a -> Ref2 x f (IxValue a) (IxValue a)
+ixRef2 = llmap2 . ix
+
+atRef2 :: (At a, Functor f) => Index a -> Ref2 x f a a -> Ref2 x f (Maybe (IxValue a)) (Maybe (IxValue a))
+atRef2 = llmap2 . at
 
 withSetter :: LensLike Identity s t a b -> (((a -> b) -> s -> t) -> r) -> r
 withSetter l f = f . cloneSetter $ l
@@ -102,166 +269,6 @@ withGetter l f = f . cloneGetter $ l
 cloneGetter :: LensLike (Const c) s t a b -> (a -> c) -> s -> c
 cloneGetter l afb = getConst . l (Const . afb)
 
-viewRef :: Ref IORef (Const a) a b -> IO a
-viewRef (Ref l s t) = with <$> readIORef s  
-    where with s' = withGetter l $ \acsc -> acsc id s' 
 
-overRef :: Ref IORef Identity a b -> (a -> b) -> IO ()
-overRef (Ref l s t) f = with =<< readIORef s  
-    where with s' = withSetter l $ \abst -> (writeIORef t $ abst f s')
-
-
-
---newLensRef :: PrimMonad m => s -> Lens s s a a -> m (RRef1 (PrimState m) a)
-{-
-http://hackage.haskell.org/package/primitive-0.6.4.0/docs/Data-Primitive-MutVar.html
-also MVar, TVar, Ptr
-
-
-s = "5"
-s' <- newIORef s
-o' = Ref _Show s' s'
->  _ShowInt = _Show :: Prism' String Int
-> o' = Ref _ShowInt s' s'
-modifyP o' (+1)
-> readIORef s'
-"6"
-
-s = ("hi!",2) :: (String, Int)
-t = (4,2)  :: (Int, Int)
-
-s' <- newIORef s
-t' <- newIORef t
-o = Ref _1 s' t'
-o' = Ref _1 s' s'
-modifyL o' tail
-readIORef s'
-> readIORef s'
-("i!",2)
-> readIORef t'
-(4,2)
-> modifyL o length
-> readIORef s'
-("i!",2)
-> readIORef t'
-(2,2)
-
-import Data.Monoid
-
-s = ["hi", " there"] :: [String]
-t = fmap Sum [1..10] :: [Sum Int]
-
-s' <- newIORef s
-t' <- newIORef t
-
-o = Ref traverse s' t'
-o' = Ref traverse s' s'
-
-o :: Applicative f => Ref IORef (->) (->) f String (Sum Int)
-o = Ref traverse s' t'
-o' :: Applicative f => Ref IORef (->) (->) f String String
-o' = Ref traverse s' s'
-
-> y <- view o
-> y
-"hi there"
-
-over o (Sum . length)
-> readIORef t'
-[Sum {getSum = 2},Sum {getSum = 6}]
-
-
--}
-
-
-
-{-
---type Getting r s a = (a -> Const r a) -> s -> Const r s
-
--- | Abstraction over how to read from and write to a mutable rference
---
-data Ref f a b = forall r . Ref (IORef r) (LensLike f r r a b)
-
-
-type Ref' f a = Ref f a a
-type LensRef a b = forall f . Functor f => Ref f a b
-type LensRef' a = LensRef a a
-
-type RRef a = Ref (Const a) a a
-type WRef a b = Ref Identity a b
-type MRef a b r = Ref ((,) r) a b
-
-
-maplike :: LensLike f a1 b1 a2 b2 -> Ref f a1 b1 -> Ref f a2 b2
-maplike l = f $ traverseOf l
-  where f l' (Ref ref l) = Ref ref (l . l')
-
---modifyRef :: Ref ((,) r) a -> (a -> (a, r)) -> IO r
---ito :: (Indexable i p, Contravariant f) => (s -> (i, a)) -> Over' p f s a
-ito' :: (Indexable i p, Contravariant f) => (s -> (a, i)) -> Over' p f s a
-ito' = ito . (swap .)
-
-foo :: Contravariant f => (b1 -> (a2, i)) -> Ref f b1 b1 -> Ref f a2 a2
-foo = maplike . ito'
-
--- TODO make Ref an inst of Contravariant?
--- instance Contravariant f => Functor (Ref' f) where
-bar :: Contravariant f => (a -> b) -> Ref' f a -> Ref' f b
-bar = maplike . to
-
-modifyRef :: MRef a b r -> (a -> (b, r)) -> IO r
-modifyRef (Ref r l) f = atomicModifyIORef' r (swap . traverseOf l (swap . f))
-
-newRef :: r -> IO (Ref f r r)
-newRef r = newIORef r >>= \r' -> return (Ref r' id)
-
-readRef :: RRef a -> IO a
-readRef (Ref r l) = view l <$> readIORef r
-
-writeRef :: WRef a b -> b -> IO ()
-writeRef (Ref r l) a = atomicModifyIORef_ r (set l a)
-
-atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
-atomicModifyIORef_ ref f = atomicModifyIORef' ref (\a -> (f a, ()))
-
-viewsRef
-  :: (Conf a r, MonadReader r m, MonadIO m)
-  => (a -> RRef b) -> m b
-viewsRef f = views conf f >>= liftIO . readRef
-
-viewRefWith
-  :: (Conf r1 r2, MonadReader r2 m, MonadIO m) => Getting (RRef b) r1 (RRef b) -> m b
-viewRefWith l = view (conf . l) >>= liftIO . readRef
-
-viewRef :: (Conf (RRef b) r, MonadReader r m, MonadIO m) => m b
-viewRef = viewRefWith id
-
-viewRefAt
-  :: Conf (Ref (Const (Maybe (IxValue a))) a a) r
-  => MonadReader r m
-  => MonadIO m
-  => At a
-  => Index a -> m (Maybe (IxValue a))
-viewRefAt i = viewsRef $ maplike (at i)
-
-ixRef :: (Ixed a, Applicative f) => Index a -> Ref' f a -> Ref' f (IxValue a)
-ixRef = maplike . ix
-
-atRef :: (At a, Functor f) => Index a -> Ref' f a -> Ref' f (Maybe (IxValue a))
-atRef = maplike . at
-
--}
-
-{-
-viewRefIxed
-  :: Conf (Ref (Const (IxValue a)) a a) r
-  => MonadReader r m
-  => MonadIO m
-  => Ixed a
-  => Monoid (IxValue a) -- TODO ?
-  => Index a -> m (IxValue a)
-viewRefIxed i = viewsRef $ maplike (ix i)
--}
---overRef f = views conf f >>= liftIO . readRef
 
 

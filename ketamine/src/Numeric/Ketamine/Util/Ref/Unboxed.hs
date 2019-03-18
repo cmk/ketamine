@@ -18,7 +18,7 @@
 -- Represents a computation, which can read values from
 -- a shared environment, pass values from function to function,
 -- and execute sub-computations in a modified environment.
-module Numeric.Ketamine.Effect.Ref.Unboxed
+module Numeric.Ketamine.Util.Ref.Unboxed
     (
 
     -- * Lenses
@@ -59,7 +59,7 @@ import           Data.Vector.Unboxed.Mutable (Unbox, MVector)
 import qualified Data.Vector.Unboxed.Mutable as MUVector
 import UnliftIO
 
-import Numeric.Ketamine.Effect.Ref
+import Numeric.Ketamine.Util.Ref
 
 -- | An unboxed rference. This works like an 'IORef', but the data is
 -- stored in a bytearray instead of a heap object, avoiding

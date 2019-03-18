@@ -106,7 +106,7 @@ fzf
 
 REF wip:
 
-module Numeric.Ketamine.Effect.Ref where
+module Numeric.Ketamine.Util.Ref where
 
 
 import Numeric.Ketamine.Types

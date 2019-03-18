@@ -6,7 +6,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Numeric.Ketamine.Effect.Log.Types (
+module Numeric.Ketamine.Util.Log.Types (
     LogFormat (..)
 
   , Logger
@@ -48,34 +48,29 @@ module Numeric.Ketamine.Effect.Log.Types (
   , logStrLength
   ) where
 
-import Control.Applicative
+
 import           Control.Concurrent (ThreadId)
 import           Control.Exception (SomeException)
-import Lens.Micro (Lens')
-import Lens.Micro.TH (makeLenses)
-import Data.Bifunctor
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as LB
 import           Data.Map.Strict (Map, singleton)
-import qualified Data.Map.Strict as Map
 import           Data.Scientific (Scientific)
 import           Data.Semigroup (Semigroup)
 import           Data.String (fromString)
 import           Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
 import           Data.Word (Word64, Word32, Word16, Word8)
-import Data.Int (Int64, Int32, Int16, Int32, Int8)
-
 import           GHC.Stack (CallStack, prettyCallStack)
-
 import           Language.Haskell.TH.Syntax (Loc (..))
-
-
-
-
 import           System.Log.FastLogger (LogStr, ToLogStr (..), logStrLength)
 import           System.Posix.Types (CPid (..), ProcessID)
+import           Control.Applicative
+import           Data.Bifunctor
+import           Data.Int (Int64, Int32, Int16, Int32, Int8)
+import           Lens.Micro (Lens')
+import           Lens.Micro.TH (makeLenses)
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.Map.Strict as Map
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 
 data LogLevel =
     Debug
@@ -108,7 +103,6 @@ data Logger =
     , _loggerFmt :: !LogFormat
     , _loggerOut :: LogStr -> IO ()
     }
---makeLenses ''Logger
 
 class HasLogger s a | s -> a where
   logger :: Lens' s a

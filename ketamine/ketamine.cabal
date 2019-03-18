@@ -21,19 +21,19 @@ library
   exposed-modules:
       Numeric.Ketamine
       Numeric.Ketamine.Agent
-      Numeric.Ketamine.Effect.Clock
-      Numeric.Ketamine.Effect.Exception
-      Numeric.Ketamine.Effect.Log
-      Numeric.Ketamine.Effect.Log.Logfmt
-      Numeric.Ketamine.Effect.Log.Types
-      Numeric.Ketamine.Effect.Random
-      Numeric.Ketamine.Effect.Ref
-      Numeric.Ketamine.Effect.Resource
-      Numeric.Ketamine.Effect.State
       Numeric.Ketamine.Environment
       Numeric.Ketamine.Episode
       Numeric.Ketamine.Outcome
       Numeric.Ketamine.Types
+      Numeric.Ketamine.Util.Clock
+      Numeric.Ketamine.Util.Exception
+      Numeric.Ketamine.Util.Log
+      Numeric.Ketamine.Util.Log.Logfmt
+      Numeric.Ketamine.Util.Log.Types
+      Numeric.Ketamine.Util.Random
+      Numeric.Ketamine.Util.Ref
+      Numeric.Ketamine.Util.State
+
  
   hs-source-dirs:
       src

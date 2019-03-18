@@ -8,7 +8,7 @@
 
  {-# OPTIONS_GHC -w #-}
 -- | State effect and handlers.
-module Numeric.Ketamine.Effect.State where
+module Numeric.Ketamine.Util.State where
 
 import Control.Monad (ap)
 import Control.Monad.Trans.Class (MonadTrans (lift))
@@ -25,7 +25,7 @@ import Control.Monad.Primitive
 import Control.Monad.Trans.Reader (ReaderT(..))
 import Data.STRef
 
-import Numeric.Ketamine.Effect.Random
+import Numeric.Ketamine.Util.Random
 
 newtype StateST s a = StateST  { unStateST :: forall r. ReaderT (STRef r s) (ST r) a }
   deriving Functor

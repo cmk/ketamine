@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Numeric.Ketamine.Effect.Log.Logfmt (
+module Numeric.Ketamine.Util.Log.Logfmt (
     formatLogfmt
   , parseLogfmt
   , fmtString
@@ -28,7 +28,7 @@ import           Data.Text.Encoding.Error (lenientDecode)
 import qualified Data.Text.Lazy.Encoding as LTE
 
 
-import           Numeric.Ketamine.Effect.Log.Types
+import           Numeric.Ketamine.Util.Log.Types
 
 
 -- | Format a log record acc. to the \"logfmt\" convention.

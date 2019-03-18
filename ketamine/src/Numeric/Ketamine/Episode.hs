@@ -21,7 +21,7 @@ import Control.Monad.Morph (MFunctor(..), MMonad(..), MonadTrans(..))
 
 import Numeric.Ketamine.Agent
 import Numeric.Ketamine.Environment
-import Numeric.Ketamine.Effect.Exception (EpisodeCompleted(..))
+import Numeric.Ketamine.Util.Exception (EpisodeCompleted(..))
 
 --import Pipes.Safe
 import qualified Pipes.Core as P

@@ -8,7 +8,7 @@ import Test.Hspec (Spec, describe)
 import Test.Hspec.QuickCheck (prop)
 import qualified Test.QuickCheck as QC
 ------------------------------------------------------------------------------
-import Numeric.Ketamine.Effect.Random
+import Numeric.Ketamine.Util.Random
 
 spec :: Spec
 spec = do

@@ -1,4 +1,4 @@
-module Numeric.Ketamine.Effect.Exception (
+module Numeric.Ketamine.Util.Exception (
     tryAll
   , tryEvaluate
   , EpisodeCompleted(..)

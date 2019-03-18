@@ -14,7 +14,7 @@
 {-# LANGUAGE UndecidableInstances       #-}
 
  {-# OPTIONS_GHC -w #-}
-module Numeric.Ketamine.Effect.Random
+module Numeric.Ketamine.Util.Random
     (
     -- * HasRVar
       HasRVar                       (..)

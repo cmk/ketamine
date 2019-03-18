@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 
-module Numeric.Ketamine.Effect.Log (
+module Numeric.Ketamine.Util.Log (
     Logger
   , HasLogger (..)
   , newLogger
@@ -68,8 +68,8 @@ import           GHC.Stack (HasCallStack, SrcLoc (..), callStack, getCallStack)
 import           System.Environment (getProgName)
 import           System.Log.FastLogger (defaultBufSize, newStderrLoggerSet, pushLogStrLn, rmLoggerSet)
 import           System.Posix.Process (getProcessID)
-import           Numeric.Ketamine.Effect.Log.Logfmt (fmtString, formatLogfmt)
-import           Numeric.Ketamine.Effect.Log.Types
+import           Numeric.Ketamine.Util.Log.Logfmt (fmtString, formatLogfmt)
+import           Numeric.Ketamine.Util.Log.Types
 import           Numeric.Ketamine.Types
 import qualified Control.Exception.Safe as Safe
 

@@ -9,7 +9,7 @@
 
  {-# OPTIONS_GHC -w #-}
 -- | Environment values with stateful capabilities.
-module Numeric.Ketamine.Effect.Ref where
+module Numeric.Ketamine.Util.Ref where
 
 
 import Numeric.Ketamine.Types
@@ -68,80 +68,68 @@ l = Ref traverse s'
 ["hihi","therethere"]
 -}
 
--- | Abstraction over a mutable reference. 
-data Ref x f a = forall s . Ref (LensLike' f s a) (MutVar x s)
-
-instance Functor (Ref x (Const r)) where fmap = llmap . to
+data Ref x a = forall s . Ref (Lens' s a) (MutVar x s)
 
 type IORef = Ref RealWorld
-type IORead a = IORef (Const a) a
-type IOWrite a = IORef Identity a
-
 type STRef s = Ref s
-type STRead s a = STRef s (Const a) a
-type STWrite s a = STRef s Identity a
 
-newLensRef :: (Functor f, PrimMonad m) => MutVar (PrimState m) s -> Lens' s a -> Ref (PrimState m) f a
-newLensRef s l = Ref l s
+newRef :: PrimMonad m => MutVar (PrimState m) s -> Lens' s a -> Ref (PrimState m) a
+newRef s l = Ref l s
 
-newRef :: PrimMonad m => s -> LensLike' f s a -> m (Ref (PrimState m) f a)
-newRef s l = (Ref l) <$> M.newMutVar s 
-
-readRef :: PrimMonad m => Ref (PrimState m) (Const a) a -> m a
+readRef :: PrimMonad m => Ref (PrimState m) a -> m a
 readRef (Ref l r) = view l <$> M.readMutVar r
 
-writeRef :: PrimMonad m => Ref (PrimState m) Identity a -> a -> m ()
+writeRef :: PrimMonad m => Ref (PrimState m) a -> a -> m ()
 writeRef (Ref l r) a = M.modifyMutVar r (set l a)
 
-modifyRef :: PrimMonad m => Ref (PrimState m) Identity a -> (a -> a) -> m ()
+modifyRef :: PrimMonad m => Ref (PrimState m) a -> (a -> a) -> m ()
 modifyRef (Ref l r) f = M.modifyMutVar r (over l f)
 
 atomicModifyRef
-  :: PrimMonad m => Ref (PrimState m) ((,) b) a -> (a -> (a, b)) -> m b
+  :: PrimMonad m => Ref (PrimState m) a -> (a -> (a, b)) -> m b
 atomicModifyRef (Ref l r) f = M.atomicModifyMutVar r (swap . traverseOf l (swap . f))
 
 -- | Strict version of 'writeRef'.
-writeRef' :: PrimMonad m => Ref (PrimState m) Identity a -> a -> m ()
+writeRef' :: PrimMonad m => Ref (PrimState m) a -> a -> m ()
 writeRef' (Ref l r) a = M.modifyMutVar' r (set l a)
 
 -- | Strict version of 'modifyRef'.
-modifyRef' :: PrimMonad m => Ref (PrimState m) Identity a -> (a -> a) -> m ()
+modifyRef' :: PrimMonad m => Ref (PrimState m) a -> (a -> a) -> m ()
 modifyRef' (Ref l r) f = M.modifyMutVar' r (over l f)
 
 -- | Strict version of 'atomicModifyRef'.
 atomicModifyRef'
-  :: PrimMonad m => Ref (PrimState m) ((,) b) a -> (a -> (a, b)) -> m b
+  :: PrimMonad m => Ref (PrimState m) a -> (a -> (a, b)) -> m b
 atomicModifyRef' (Ref l r) f = M.atomicModifyMutVar' r (swap . traverseOf l (swap . f))
+
+llmap :: Lens' s a -> Ref x s -> Ref x a
+llmap l' (Ref l r) = Ref (l . l') r
 
 viewRefWith
   :: (Conf r s, MonadReader s m, MonadIO m) 
-  => Getting (IORead a) r (IORead a) -> m a
+  => Getting (IORef a) r (IORef a) -> m a
 viewRefWith l = view (conf . l) >>= liftIO . readRef
-
-viewRef 
-  :: (Conf (IORead a) s, MonadReader s m, MonadIO m) 
-  => m a
-viewRef = viewRefWith id
 
 viewsRef
   :: (MonadReader r m, Conf s r, MonadIO m) 
-  => (s -> IORead a) -> m a
+  => (s -> IORef a) -> m a
 viewsRef f = views conf f >>= liftIO . readRef
 
-llmap :: LensLike' f s a -> Ref x f s -> Ref x f a
-llmap l = f $ traverseOf l where f l' (Ref l s) = Ref (l . l') s
-
-ixRef :: (Ixed a, Applicative f) => Index a -> Ref x f a -> Ref x f (IxValue a)
-ixRef = llmap . ix
-
-atRef :: (At a, Functor f) => Index a -> Ref x f a -> Ref x f (Maybe (IxValue a))
-atRef = llmap . at
+viewRef 
+  :: (Conf (IORef a) s, MonadReader s m, MonadIO m) 
+  => m a
+viewRef = viewRefWith id
 
 
 
 
 {-
 
+ixRef :: Ixed a => Index a -> Ref x a -> Ref x (IxValue a)
+ixRef = llmap . ix
+
+atRef :: At a => Index a -> Ref x a -> Ref x (Maybe (IxValue a))
+atRef = llmap . at
 s = "5"
 s' <- newMutVar s
 o' = Ref2 _Show s' s'

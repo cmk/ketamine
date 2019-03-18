@@ -29,10 +29,10 @@ import Data.IORef
 import Numeric.Ketamine.Agent
 import Numeric.Ketamine.Environment
 import Numeric.Ketamine.Episode
-import Numeric.Ketamine.Effect.Exception (EpisodeCompleted(..))
-import qualified Numeric.Ketamine.Effect.Ref as R
+import Numeric.Ketamine.Util.Exception (EpisodeCompleted(..))
+import qualified Numeric.Ketamine.Util.Ref as R
 
-import qualified Numeric.Ketamine.Effect.Log as L
+import qualified Numeric.Ketamine.Util.Log as L
 
 import qualified Control.Monad.Reader as MTL
 import           Control.Monad.Trans.Except (runExceptT)
@@ -68,14 +68,14 @@ type EpState = (Int, Int)
 initial :: EpState
 initial = (0,0)
 
+--newRef :: PrimMonad m => MutVar (PrimState m) s -> Lens' s a -> Ref (PrimState m) a
 
 test3 :: IO ()
 test3 = do 
-  (epState :: M.MutVar RealWorld EpState) <- M.newMutVar initial
+  epState <- M.newMutVar initial
 
-  let --agRef :: R.IORef 
-      agRef = R.newLensRef epState (_1 :: Lens' EpState Int)
-      -- enRef = R.Ref (_2 :: Lens' EpState Int) epState
+  let agRef = R.newRef @IO epState _1 
+      enRef = R.newRef @IO epState _2
  
   return ()
 

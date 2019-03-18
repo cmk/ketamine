@@ -34,7 +34,7 @@ import qualified System.Random.MWC as MWC
 
 -- platform-effect
 
-import qualified Numeric.Ketamine.Effect.Random as Platform
+import qualified Numeric.Ketamine.Util.Random as Platform
 
 main :: IO ()
 main = do

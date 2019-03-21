@@ -25,14 +25,12 @@ library
       Numeric.Ketamine.Episode
       Numeric.Ketamine.Outcome
       Numeric.Ketamine.Types
-      Numeric.Ketamine.Util.Clock
       Numeric.Ketamine.Util.Exception
       Numeric.Ketamine.Util.Log
       Numeric.Ketamine.Util.Log.Logfmt
       Numeric.Ketamine.Util.Log.Types
       Numeric.Ketamine.Util.Random
       Numeric.Ketamine.Util.Ref
-      Numeric.Ketamine.Util.State
 
  
   hs-source-dirs:
@@ -51,6 +49,7 @@ library
     , errors
     , exceptions
     , fast-logger
+    , lens
     , mmorph
     , microlens
     , microlens-th

@@ -5,7 +5,19 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
+
 {-# LANGUAGE RankNTypes #-}
+
+
+{-# LANGUAGE ScopedTypeVariables #-}
+
+{-# LANGUAGE TypeApplications #-}
+
+{-# LANGUAGE TemplateHaskell #-}
+-- {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ConstraintKinds #-}
+-- {-# LANGUAGE PolyKinds #-}
+-- {-# LANGUAGE ImpredicativeTypes #-}
 
  {-# OPTIONS_GHC -w #-}
 -- | Environment values with stateful capabilities.
@@ -24,7 +36,10 @@ import Data.Tuple (swap)
 import Data.Primitive.MutVar (MutVar)
 import qualified Data.Primitive.MutVar as M
 
-
+import Data.Bitraversable
+import GHC.Exts (Constraint)
+import qualified Control.Lens as L
+import qualified Control.Lens.Internal.Prism as L
 
 {-
 import Lens.Micro.GHC
@@ -76,6 +91,9 @@ type STRef s = Ref s
 newRef :: PrimMonad m => MutVar (PrimState m) s -> Lens' s a -> Ref (PrimState m) a
 newRef s l = Ref l s
 
+-- newGlobalRef --use logger-simple trick
+-- newLocalRef 
+
 readRef :: PrimMonad m => Ref (PrimState m) a -> m a
 readRef (Ref l r) = view l <$> M.readMutVar r
 
@@ -110,54 +128,51 @@ viewRefWith
   => Getting (IORef a) r (IORef a) -> m a
 viewRefWith l = view (conf . l) >>= liftIO . readRef
 
-viewsRef
-  :: (MonadReader r m, Conf s r, MonadIO m) 
-  => (s -> IORef a) -> m a
-viewsRef f = views conf f >>= liftIO . readRef
-
 viewRef 
   :: (Conf (IORef a) s, MonadReader s m, MonadIO m) 
   => m a
 viewRef = viewRefWith id
 
-
+viewsRef
+  :: (MonadReader r m, Conf s r, MonadIO m) 
+  => (s -> IORef a) -> m a
+viewsRef f = views conf f >>= liftIO . readRef
 
 
 {-
 
-ixRef :: Ixed a => Index a -> Ref x a -> Ref x (IxValue a)
-ixRef = llmap . ix
-
-atRef :: At a => Index a -> Ref x a -> Ref x (Maybe (IxValue a))
-atRef = llmap . at
 s = "5"
-s' <- newMutVar s
-o' = Ref2 _Show s' s'
->  _ShowInt = _Show :: Prism' String Int
-> o' = Ref2 _ShowInt s' s'
-modifyP o' (+1)
-> readMutVar s'
+s' <- M.newMutVar s
+o' = newPRef s' s' L._Show 
+modifyPRef o' (+1)
+M.readMutVar s'
 "6"
+-}
 
+
+{-
 s = ("hi!",2) :: (String, Int)
 t = (4,2)  :: (Int, Int)
 
-s' <- newMutVar s
-t' <- newMutVar t
-o = Ref2 _1 s' t'
-o' = Ref2 _1 s' s'
-modifyL o' tail
-readMutVar s'
-> readMutVar s'
-("i!",2)
-> readMutVar t'
-(4,2)
-> modifyL o length
-> readMutVar s'
-("i!",2)
-> readMutVar t'
-(2,2)
+s' <- M.newMutVar s
+t' <- M.newMutVar t
+o = newLRef s' t' _1
+o' = newLRef s' s' _1
 
+modifyLRef o' tail
+M.readMutVar s'
+-- ("i!",2)
+M.readMutVar t'
+--(4,2)
+--
+modifyLRef o length
+M.readMutVar s'
+-- ("i!",2)
+M.readMutVar t'
+-- (2,2)
+-}
+
+{-
 import Data.Monoid
 
 s = ["hi", "there"] :: [String]
@@ -166,28 +181,131 @@ t = fmap Sum [1..10] :: [Sum Int]
 s' <- M.newMutVar s
 t' <- M.newMutVar t
 
-o = Ref2 traverse s' t'
-o' = Ref2 traverse s' s'
+o = newLRef s' t' traverse 
+o' = newLRef s' s' traverse 
 
-o :: Applicative f => Ref2 MutVar (->) (->) f String (Sum Int)
-o = Ref2 traverse s' t'
-o' :: Applicative f => Ref2 MutVar (->) (->) f String String
-o' = Ref2 traverse s' s'
+readLRef o
+--"hithere"
 
-> y <- view o
-> y
-"hithere"
-
-modifyRef2 o (Sum . length)
+modifyLRef o (Sum . length)
 M.readMutVar t'
-[Sum {getSum = 2},Sum {getSum = 6}]
+--[Sum {getSum = 2},Sum {getSum = 5}]
 
-modifyRef2 o' ("oh"++)
+modifyLRef o' ("oh"++)
 M.readMutVar s'
-> M.readMutVar s'
 ["ohhi","ohthere"]
 
 -}
+
+type Reads d a = (d (Const a) :: Constraint)
+type Writes d = (d Identity :: Constraint)
+class (f :: * -> * -> *) ~ (->) => Function f
+instance Function (->)
+
+type Ocular c d s t a b = forall p f. (c p, d f) => L.Optic p f s t a b -- p a (f b) -> p s (f t)
+
+
+-- | Abstraction over a tuple of mutable references. The first reference is read-only.
+data RefST r c d s t a b = RefST (Ocular c d s t a b) (MutVar r s) (MutVar r t)
+
+-- id :: Equality' s s
+id_ref :: PrimMonad m => MutVar (PrimState m) s -> RefST (PrimState m) L.Profunctor Functor s s s s
+id_ref rs = RefST id rs rs
+
+-- non :: Eq a => a -> Iso' (Maybe a) a
+non_ref :: (PrimMonad m, Eq s) => s -> MutVar (PrimState m) (Maybe s) -> RefST (PrimState m) L.Profunctor Functor (Maybe s) (Maybe s) s s 
+non_ref s rs = RefST (L.non s) rs rs
+
+-- only :: Eq a => a -> Prism' a ()
+only_ref :: (PrimMonad m, Eq s) => s -> MutVar (PrimState m) s -> RefST (PrimState m) L.Choice Applicative s s () ()
+only_ref s rs = RefST (L.only s) rs rs
+
+-- united :: Lens' a ()
+united_ref :: PrimMonad m => MutVar (PrimState m) s -> RefST (PrimState m) Function Functor s s () () 
+united_ref rs = RefST L.united rs rs
+
+-- both :: Bitraversable r => Traversal (r a a) (r b b) a b
+both_ref :: (PrimMonad m, Bitraversable r) => MutVar (PrimState m) (r a a) -> MutVar (PrimState m) (r b b) -> RefST (PrimState m) Function Applicative (r a a) (r b b) a b
+both_ref rs rt = RefST L.both rs rt
+
+-- traverse :: Traversable f => Traversal (f s) (f t) s t
+traverse_ref :: (PrimMonad m, Traversable f) => MutVar (PrimState m) (f s) -> MutVar (PrimState m) (f t) -> RefST (PrimState m) Function Applicative (f s) (f t) s t 
+traverse_ref rs rt = RefST traverse rs rt
+
+
+
+
+data RRef r c d a b = forall s t. RRef (Ocular c d s t a b) (MutVar r s) (MutVar r t)  -- { unRRef :: forall s t. RefST r c d s t a b }
+--type LRef =  RefST r c d s t a b
+
+
+
+
+newLocalRRef :: PrimMonad m => s -> t -> Ocular c d s t a b -> m (RRef (PrimState m) c d a b)
+newLocalRRef s t o = (RRef o) <$> M.newMutVar s <*> M.newMutVar t 
+
+newRRef :: PrimMonad m => MutVar (PrimState m) s -> MutVar (PrimState m) t -> Ocular c d s t a b -> RRef (PrimState m) c d a b
+newRRef s t o = RRef o s t 
+
+{-
+newLRef :: forall a b c d m s t. (PrimMonad m) => MutVar (PrimState m) s -> MutVar (PrimState m) t -> Ocular Function Applicative s t a b -> RRef (PrimState m) c d a b
+newLRef = newRRef @m @_ @_ @Function @Applicative
+-}
+
+newLRef
+  :: MutVar RealWorld w1
+     -> MutVar RealWorld w2
+     -> Ocular Function Functor w1 w2 a b
+     -> RRef RealWorld Function Functor a b
+newLRef = newRRef @IO @_ @_ @Function @Functor
+
+newPRef
+  :: MutVar RealWorld w1
+     -> MutVar RealWorld w2
+     -> Ocular L.Choice Applicative w1 w2 a b
+     -> RRef RealWorld L.Choice Applicative a b
+newPRef = newRRef @IO @_ @_ @L.Choice @Applicative
+
+
+data Foo = Foo { _a :: Int, _b :: String }
+L.makeLenses ''Foo
+
+--a :: Functor f => (Int -> f Int) -> Foo -> f Foo
+--b :: Functor f => (String -> f String) -> Foo -> f Foo
+
+a_rref :: PrimMonad m => Foo -> m (RRef (PrimState m) Function Functor Int Int)
+a_rref s = newLocalRRef s s a
+
+b_rref :: PrimMonad m => Foo -> m (RRef (PrimState m) Function Functor String String)
+b_rref s = newLocalRRef s s b
+
+
+modifyPRef
+  :: PrimMonad m
+  => c (L.Market a b)
+  => Writes d
+  => RRef (PrimState m) c d a b 
+  -> (a -> b) 
+  -> m ()
+modifyPRef (RRef p rs rt) f = 
+  do s <- M.readMutVar rs
+     L.withPrism p $ \bt seta -> 
+       either (M.writeMutVar rt) (M.writeMutVar rt . bt . f) (seta s)
+
+readLRef
+  :: (c (->), Function (->), d (Const a), PrimMonad f) =>
+     RRef (PrimState f) c d a b -> f a
+--readLRef :: (PrimMonad m, Reads Applicative a) => RRef (PrimState m) Function Applicative a b -> m a
+readLRef (RRef l rs _) = get <$> M.readMutVar rs where get s' = withGetter l $ \acsc -> acsc id s' 
+
+
+modifyLRef :: (PrimMonad m, Writes d, c (->)) => RRef (PrimState m) c d a b -> (a -> b) -> m ()
+modifyLRef (RRef l rs rt) f = 
+  do s <- M.readMutVar rs
+     withSetter l $ \abst -> 
+       M.writeMutVar rt $! abst f s
+
+
 
 -- | Abstraction over a tuple of mutable references. The first reference is read-only.
 -- Use 'newRef2'' to mutate the first reference with a 'LensLike''.

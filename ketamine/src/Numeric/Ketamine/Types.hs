@@ -87,7 +87,7 @@ preview l = Reader.asks (getFirst #. foldMapOf l (First #. Just))
 -- * Instances of typeclasses like 'MonadLogger' are implemented using
 -- classes defined on the environment, instead of using an
 -- underlying monad. See 'Numeric.Ketamine.Util.Log'.
-newtype Keta e a = Keta { unKeta :: ReaderT e IO a }
+newtype Keta e a = Keta { unKeta :: ReaderT e (SafeT IO) a }
   deriving (Functor, Applicative, Monad, MonadIO, MonadReader e, MonadThrow)
 
 runKeta :: MonadIO m => e -> Keta e a -> m a

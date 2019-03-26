@@ -3,5 +3,7 @@ flags: {}
 
 packages:
   - ketamine
-  - ketamine-gym
 
+extra-deps:
+  - mezzolens-0.0.0@sha256:da3a9df86229e3667c22e1c85a639a3aeb4034bb188831287531f9cd033bcb17
+  - ref-fd-0.4.0.1@sha256:4f7f2de57f8a82b0ef5003cecac6214170df8e9077058da3e89e45ea99ee2961

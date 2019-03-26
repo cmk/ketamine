@@ -52,7 +52,7 @@ import Numeric.Ketamine.Types
 --TODO:  tic tac toe ex
 
 
-
+{-
 
 data TestCapabilities = TestCaps
     { _testlogger :: !L.Logger
@@ -102,7 +102,7 @@ foo k = L.withStdLogger L.Info $ \l ->
 
 bar :: IO ()
 bar = foo (logPath "/yo/bitch")
-
+-}
 
 -- TODO move to readme / put in lhs file
 -- TODO give example using ether

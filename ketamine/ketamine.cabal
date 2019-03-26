@@ -51,6 +51,7 @@ library
     , fast-logger
     , lens
     , mmorph
+    , mezzolens
     , microlens
     , microlens-th
     , microlens-ghc
@@ -61,8 +62,10 @@ library
     , pipes
     , pipes-safe
     , primitive
+    , profunctors
     , random-fu
     , random-source
+    , ref-fd
     , resourcet
     , rvar
     , safe-exceptions

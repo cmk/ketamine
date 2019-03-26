@@ -4,34 +4,8 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | Canonical Logging Interface
---
--- Minimalistic example:
---
--- >>> :set -XOverloadedStrings
--- >>> :set -XTypeApplications
--- >>> :m Platform.Effect Platform.Log Data.Text
--- >>> :{
--- runLoggingT . flip evalStateT (0 :: Int) $ do
---     infoT "been here"
---     modify (+ (1 :: Int))
---     withContext (Namespace "banana") $ do
---         errT "ouch!"
---         modify (+ (1 :: Int))
---         withContext (Namespace "rpc" +++ field "moon" ("full" :: Text)) $ do
---             x <- get @Int
---             infoT "done that" `inContext` field "state" (show x)
---             debugT "Look, my password lol!" `inContext` field "password" ("s3cr3t" :: Text)
---             infoT "ok tschüss!"
---     infoT "epilogue"
--- :}
--- level="info" msg="been here" pid=65499 prog="<interactive>" loc="interactive:Ghci1:6:5"
--- level="error" msg="ouch!" ns="banana" pid=65499 prog="<interactive>" loc="interactive:Ghci1:9:9"
--- level="info" msg="done that" moon="full" ns="rpc" pid=65499 prog="<interactive>" state="2" loc="interactive:Ghci1:13:13"
--- level="info" msg="ok tschüss!" moon="full" ns="rpc" pid=65499 prog="<interactive>" loc="interactive:Ghci1:15:13"
--- level="info" msg="epilogue" pid=65499 prog="<interactive>" loc="interactive:Ghci1:16:5"
---
-module Numeric.Ketamine.Capability.Log (
+
+module Numeric.Ketamine.Util.Log (
     Logger
   , HasLogger (..)
   , newLogger
@@ -66,7 +40,7 @@ module Numeric.Ketamine.Capability.Log (
 
   , LogFormat (..)
 
-  , Severity (..)
+  , LogLevel (..)
 
   , LogRecordT
   , LogRecord (..)
@@ -86,7 +60,6 @@ module Numeric.Ketamine.Capability.Log (
 
 import           Control.Exception (SomeException)
 import           Control.Exception.Safe (Exception (..), MonadMask)
-import           Control.Lens (over, set, view)
 import           Control.Monad (when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Reader (MonadReader, ReaderT (..), local)
@@ -95,22 +68,21 @@ import           GHC.Stack (HasCallStack, SrcLoc (..), callStack, getCallStack)
 import           System.Environment (getProgName)
 import           System.Log.FastLogger (defaultBufSize, newStderrLoggerSet, pushLogStrLn, rmLoggerSet)
 import           System.Posix.Process (getProcessID)
-
-import           Numeric.Ketamine.Capability.Log.Logfmt (fmtString, formatLogfmt)
-import           Numeric.Ketamine.Capability.Log.Types
-
+import           Numeric.Ketamine.Util.Log.Logfmt (fmtString, formatLogfmt)
+import           Numeric.Ketamine.Util.Log.Types
+import           Numeric.Ketamine.Types
 import qualified Control.Exception.Safe as Safe
 
 
 -- | Fully customisable function for logging. Useful for when the caller has
---   been keeping track of lower level details such as 'Severity' and 'Loc'.
+--   been keeping track of lower level details such as 'LogLevel' and 'Loc'.
 --   Prefer the use of 'debug', 'info' and 'err' over this in general.
 recordLog ::
      HasLogger r Logger
   => MonadReader r m
   => MonadIO m
   => IsLogStr msg
-  => Severity
+  => LogLevel
   -> Maybe Loc
   -> msg
   -> m ()
@@ -126,7 +98,7 @@ recordLog sev loc msg = do
 
 ------------------------------------------------------------------------------
 
--- | Takes a 'LogRecord' and records the message with 'Severity' and 'Loc',
+-- | Takes a 'LogRecord' and records the message with 'LogLevel' and 'Loc',
 --   within the 'LogContext' using 'recordLog' and 'inContext'.
 logRecord ::
      HasLogger r Logger
@@ -148,9 +120,9 @@ noLogger =
 --
 -- Adds the current process' name and PID to the 'LogContext'. Log
 -- output is buffered and goes to @stderr@.
-withStdLogger :: (MonadIO m, MonadMask m) => Severity -> (Logger -> m a) -> m a
-withStdLogger sev f =
-  let
+withStdLogger :: (MonadIO m, MonadMask m) => LogLevel -> (Logger -> m a) -> m a
+withStdLogger sev f = Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+  where
     stdLogger = do
       io <- newStderrLoggerSet defaultBufSize
       prog <- Process <$> getProgName
@@ -161,33 +133,33 @@ withStdLogger sev f =
         out = pushLogStrLn io
 
       pure (newLogger sev ctx fmt (liftIO . out), rmLoggerSet io)
-  in
-    Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+    
 
 -- | Very minimal logger. Doesn't print much except errors.
 --
 -- 'LogContext'. Log output is buffered and goes to @stderr@.
-withMinimalLogger :: (MonadIO m, MonadMask m) => Severity -> (Logger -> m a) -> m a
-withMinimalLogger sev f =
-  let
-    stdLogger = do
-      io <- newStderrLoggerSet defaultBufSize
-      let
-        fmt = LogFormat (\_ _ _ msg -> fmtString msg)
-        out = pushLogStrLn io
+withMinimalLogger 
+  :: (MonadIO m, MonadMask m) 
+  => LogLevel 
+  -> (Logger -> m a) 
+  -> m a
+withMinimalLogger sev f = 
+  Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+    where
+      stdLogger = do
+          io <- newStderrLoggerSet defaultBufSize
+          let
+            fmt = LogFormat (\_ _ _ msg -> fmtString msg)
+            out = pushLogStrLn io
 
-      pure (newLogger sev mempty fmt (liftIO . out), rmLoggerSet io)
-  in
-    Safe.bracket (liftIO stdLogger) (liftIO . snd) (f . fst)
+          pure (newLogger sev mempty fmt (liftIO . out), rmLoggerSet io)
+    
 
 runStdLogging :: (MonadIO m, MonadMask m) => ReaderT Logger m a -> m a
-runStdLogging ma =
-  withStdLogger Info $
-    flip runLogging ma
+runStdLogging ma = withStdLogger Info $ flip runLogging ma
 
 runLogging :: r -> ReaderT r m a -> m a
-runLogging =
-  flip runReaderT
+runLogging = flip runReaderT
 
 debug ::
      HasLogger r Logger
@@ -283,7 +255,7 @@ inContext =
   flip withContext
 
 -- | Adjust the log level for the given monadic action
-setLevel :: (HasLogger r Logger, MonadReader r m) => Severity -> m a -> m a
+setLevel :: (HasLogger r Logger, MonadReader r m) => LogLevel -> m a -> m a
 setLevel =
   local . set (logger . loggerLevel)
 
@@ -298,7 +270,7 @@ logException ::
   -> m ()
 logException e =
   withContext (toException e +++ callStack) $
-    errT "An exception occurred"
+    errT "An exception occurred."
 
 -- | Run an action and log any exception that might occur.
 --

@@ -9,15 +9,16 @@
              TypeFamilies, 
              DeriveFunctor, 
              DeriveGeneric,
+             OverloadedStrings,
              Rank2Types,
              ScopedTypeVariables,
              StandaloneDeriving,
+             TemplateHaskell,
              TypeApplications
 #-}
 
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
-import Control.Applicative (Alternative(..),liftA2)
 import Control.Exception.Safe 
 import Control.Monad
 import Control.Monad.IO.Class
@@ -28,11 +29,80 @@ import Data.IORef
 import Numeric.Ketamine.Agent
 import Numeric.Ketamine.Environment
 import Numeric.Ketamine.Episode
-import Numeric.Ketamine.Exception (EpisodeCompleted(..))
+import Numeric.Ketamine.Util.Exception (EpisodeCompleted(..))
+import qualified Numeric.Ketamine.Util.Ref as R
 
+import qualified Numeric.Ketamine.Util.Log as L
+
+import qualified Control.Monad.Reader as MTL
+import           Control.Monad.Trans.Except (runExceptT)
+import           Control.Monad (void)
+import Control.Monad.Primitive (PrimMonad, PrimState, RealWorld)
+
+import qualified Data.ByteString.Lazy as LBS
+import           Data.Foldable
+import qualified Data.Primitive.MutVar as M
+import           Data.Text (Text)
+import qualified Data.Text as Text
+import           Data.Text.Encoding (encodeUtf8)
+import           Lens.Micro.TH (makeLenses)
+import           Text.Printf (printf, PrintfArg(..))
+
+import Numeric.Ketamine.Types
 --TODO:  tic tac toe ex
 
-main = test2
+
+{-
+
+data TestCapabilities = TestCaps
+    { _testlogger :: !L.Logger
+      , _testState :: (Int,Int) -- ag state / env state
+    }
+makeLenses ''TestCapabilities
+
+instance L.HasLogger TestCapabilities L.Logger where
+  logger = testlogger
+
+type EpState = (Int, Int)
+
+initial :: EpState
+initial = (0,0)
+
+--newRef :: PrimMonad m => MutVar (PrimState m) s -> Lens' s a -> Ref (PrimState m) a
+
+test3 :: IO ()
+test3 = do 
+  epState <- M.newMutVar initial
+
+  let agRef = R.newRef @IO epState _1 
+      enRef = R.newRef @IO epState _2
+ 
+  return ()
+
+-- Log the configuration.
+info :: (MTL.MonadIO m, L.HasLogger r L.Logger) => r -> Text -> m ()
+info caps msg = void . flip MTL.runReaderT caps $ L.infoT msg
+
+getPath
+  :: (MonadIO m, L.HasLogger r L.Logger) =>
+     r -> Text -> m ()
+getPath caps path = info caps . Text.pack $ printf "path is: %s" path
+
+logPath
+  :: (L.HasLogger r L.Logger, MTL.MonadReader r m, MonadIO m) =>
+     Text -> m ()
+logPath path = L.infoT . Text.pack $ printf "path is: %s" path
+
+foo :: (MonadIO m, MonadMask m) => ReaderT TestCapabilities m a -> m a
+foo k = L.withStdLogger L.Info $ \l ->
+  let 
+    caps = TestCaps l initial
+
+  in MTL.runReaderT k caps
+
+bar :: IO ()
+bar = foo (logPath "/yo/bitch")
+-}
 
 -- TODO move to readme / put in lhs file
 -- TODO give example using ether
@@ -102,7 +172,7 @@ test2 = do
 -}
 
 
-
+main = test2
 
 
 
